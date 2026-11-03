@@ -1,0 +1,11 @@
+{
+  "home": {
+    "title": "BetInsight",
+    "description": "Transparent AI forecasts for sports events.",
+    "disclaimer": "18+. Information only. This is not a call to place bets."
+  },
+  "localeSwitcher": {
+    "ru": "Русский",
+    "en": "English"
+  }
+}
