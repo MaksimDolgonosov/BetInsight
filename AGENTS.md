@@ -1,5 +1,7 @@
 Read technical docs in TZ_BetInsight.md before writing any code.
 
+See design in BetInsight.pen when before making ui/ux.
+
 <!-- BEGIN:nextjs-agent-rules -->
 
 ## This is NOT the Next.js you know

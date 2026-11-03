@@ -1,15 +1,18 @@
-import { Button } from "@/components/ui/button";
-import { Link } from "@/i18n/navigation";
-import { getLocale, getTranslations } from "next-intl/server";
+"use client";
 
-export async function LocaleSwitcher() {
-  const locale = await getLocale();
-  const t = await getTranslations("localeSwitcher");
+import { Button } from "@/components/ui/button";
+import { Link, usePathname } from "@/i18n/navigation";
+import { useLocale, useTranslations } from "next-intl";
+
+export function LocaleSwitcher() {
+  const locale = useLocale();
+  const pathname = usePathname();
+  const t = useTranslations("localeSwitcher");
   const nextLocale = locale === "ru" ? "en" : "ru";
 
   return (
     <Button variant="outline" asChild>
-      <Link href="/" locale={nextLocale}>
+      <Link href={pathname} locale={nextLocale}>
         {t(nextLocale)}
       </Link>
     </Button>
