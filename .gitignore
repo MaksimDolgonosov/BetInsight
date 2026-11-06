@@ -48,3 +48,4 @@ next-env.d.ts
 
 # local admin store used when DATABASE_URL is empty
 /data
+.neon

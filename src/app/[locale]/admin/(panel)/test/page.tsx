@@ -26,6 +26,7 @@ export default async function AdminTestPage(props: { params: Promise<{ locale: s
           remaining={data.remaining}
           reserve={data.reserve}
           lastRemaining={data.lastRemaining}
+          aiPickEnabled={data.aiPickEnabled}
           timeZone={timeZone}
         />
       )}

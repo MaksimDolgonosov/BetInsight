@@ -17,6 +17,8 @@
   },
   "dependencies": {
     "@auth/drizzle-adapter": "1.11.3",
+    "@neon/config": "^1.10.1",
+    "@neon/env": "^1.6.9",
     "@neondatabase/serverless": "1.2.0",
     "@openrouter/sdk": "1.5.34",
     "@sentry/nextjs": "11.10.0",

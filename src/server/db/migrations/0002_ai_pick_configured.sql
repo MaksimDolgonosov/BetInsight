@@ -1,0 +1,1 @@
+ALTER TABLE "app_settings" ADD COLUMN "ai_pick_configured" boolean DEFAULT false NOT NULL;

@@ -21,6 +21,7 @@ export type OutcomeEvaluation = {
   ev: number;
   bookmakerCount: number;
   candidate: boolean;
+  nearMiss: boolean;
 };
 
 export function removeMargin(prices: number[]): number[] {
@@ -123,12 +124,13 @@ export function evaluateQuotes(
       if (!best) continue;
       const consensusProb = consensusProbability(rows);
       const ev = expectedValue(consensusProb, best.price);
-      const candidate =
+      const priced =
         lineAllowed &&
-        ev > thresholds.evThreshold &&
         best.price >= thresholds.oddsMin &&
         best.price <= thresholds.oddsMax &&
         byBookmaker.size >= thresholds.minBookmakers;
+      const candidate = priced && ev > thresholds.evThreshold;
+      const nearMiss = priced && ev >= 0 && ev <= thresholds.evThreshold && !candidate;
 
       evaluations.push({
         market: sample.market,
@@ -140,6 +142,7 @@ export function evaluateQuotes(
         ev,
         bookmakerCount: byBookmaker.size,
         candidate,
+        nearMiss,
       });
     }
   }

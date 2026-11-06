@@ -48,6 +48,31 @@ describe("odds model", () => {
     expect(home!.bookmakerCount).toBe(3);
     expect(home!.bestPrice).toBe(2.2);
     expect(home!.candidate).toBe(home!.ev > 0.02);
+    expect(home!.nearMiss).toBe(!home!.candidate && home!.ev >= 0 && home!.ev <= 0.02);
+  });
+
+  it("keeps a priced outcome between zero and the threshold as a near miss", () => {
+    const rows = evaluateQuotes(
+      [
+        quote("pinnacle", "Pinnacle", "home", 2),
+        quote("pinnacle", "Pinnacle", "away", 2),
+        quote("bet365", "Bet365", "home", 2),
+        quote("bet365", "Bet365", "away", 2),
+        quote("unibet", "Unibet", "home", 2.02),
+        quote("unibet", "Unibet", "away", 1.98),
+      ],
+      {
+        evThreshold: 0.02,
+        oddsMin: 1.5,
+        oddsMax: 4,
+        minBookmakers: 3,
+        totalsPointMin: 0.5,
+        totalsPointMax: 5.5,
+      },
+    );
+
+    expect(rows.every((row) => row.candidate === false)).toBe(true);
+    expect(rows.every((row) => row.nearMiss === true)).toBe(true);
   });
 
   it("ignores basketball totals outside the configured point range", () => {
@@ -71,6 +96,7 @@ describe("odds model", () => {
     );
 
     expect(rows.every((row) => row.candidate === false)).toBe(true);
+    expect(rows.every((row) => row.nearMiss === false)).toBe(true);
   });
 
   it("prices a two-outcome basketball moneyline without a draw", () => {

@@ -57,6 +57,18 @@ export async function saveSettingsAction(
   return { ok: true };
 }
 
+export async function resetStatisticsAction(): Promise<{ ok: true } | { ok: false; error: ActionError }> {
+  const session = await requireAdmin();
+  if (!session?.user?.email) return { ok: false, error: "unauthorized" };
+
+  await getAdminStore().resetStatsEpoch({ actor: session.user.email, now: new Date() });
+  revalidatePath("/ru/admin", "layout");
+  revalidatePath("/en/admin", "layout");
+  revalidatePath("/ru", "layout");
+  revalidatePath("/en", "layout");
+  return { ok: true };
+}
+
 export async function restartJobAction(
   jobRunId: string,
 ): Promise<{ ok: true } | { ok: false; error: ActionError }> {

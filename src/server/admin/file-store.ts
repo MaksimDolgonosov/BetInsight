@@ -1,19 +1,28 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { defaultSettings, type AdminSettings } from "@/server/domain/settings";
+import { defaultSettings, hydrateSettings, type AdminSettings } from "@/server/domain/settings";
+import { countEpoch } from "@/server/domain/stats/epoch";
 import { decideSettlement } from "@/server/domain/settlement/profit";
 import { startOfUtcDay } from "@/server/budget/budget";
 import { testRunAllowance } from "@/server/admin/rate-limit";
 import {
   TEST_RUN_ENDPOINT,
   type AdminStore,
+  type AiConsensusDraft,
+  type AiConsensusRecord,
+  type AiPurpose,
   type AiRequestDraft,
   type AiRequestRecord,
+  type AiVoteDraft,
+  type AiVoteRecord,
   type ApiUsageRecord,
   type JobRunRecord,
   type JobStatus,
+  type ModelEvaluationDraft,
+  type ModelEvaluationRecord,
   type SettlementCandidate,
+  type StatsEpoch,
   type UsageDraft,
 } from "@/server/admin/types";
 
@@ -37,16 +46,21 @@ type StoredPrediction = {
   status: string;
   profitUnits: number | null;
   settledAt: string | null;
+  publishedAt?: string | null;
 };
 
 type FileState = {
   settings: AdminSettings;
   apiUsage: ApiUsageRecord[];
   aiRequests: AiRequestRecord[];
+  modelEvaluations: ModelEvaluationRecord[];
+  aiVotes: AiVoteRecord[];
+  aiConsensus: AiConsensusRecord[];
   jobRuns: JobRunRecord[];
   audit: { id: string; actor: string; action: string; entity: string; payload: unknown; createdAt: string }[];
   events: StoredEvent[];
   predictions: StoredPrediction[];
+  statsEpochStartedAt: string | null;
 };
 
 function emptyState(): FileState {
@@ -54,10 +68,14 @@ function emptyState(): FileState {
     settings: defaultSettings(process.env.OPENROUTER_MODEL || undefined),
     apiUsage: [],
     aiRequests: [],
+    modelEvaluations: [],
+    aiVotes: [],
+    aiConsensus: [],
     jobRuns: [],
     audit: [],
     events: [],
     predictions: [],
+    statsEpochStartedAt: null,
   };
 }
 
@@ -68,7 +86,24 @@ export class FileAdminStore implements AdminStore {
   constructor(private readonly filePath = path.join(process.cwd(), "data", "admin-state.json")) {}
 
   getSettings() {
-    return this.read((state) => state.settings);
+    return this.read((state) => hydrateSettings(state.settings));
+  }
+
+  getStatsEpoch() {
+    return this.read((state) => statsEpoch(state));
+  }
+
+  resetStatsEpoch(input: { actor: string; now: Date }) {
+    return this.update((state) => {
+      const before = statsEpoch(state);
+      state.statsEpochStartedAt = input.now.toISOString();
+      pushAudit(state, input.actor, "stats.reset", "app_settings", {
+        startedAt: state.statsEpochStartedAt,
+        previousStartedAt: before.startedAt,
+        archivedPredictions: before.predictions,
+      });
+      return statsEpoch(state);
+    });
   }
 
   saveSettings(settings: AdminSettings, actor: string) {
@@ -92,11 +127,52 @@ export class FileAdminStore implements AdminStore {
     return this.read((state) => newest(state.aiRequests).slice(0, limit));
   }
 
-  aiSpendSince(since: Date) {
+  aiSpendSince(since: Date, purposes?: AiPurpose[]) {
     return this.read((state) =>
       state.aiRequests
         .filter((row) => row.createdAt >= since.toISOString())
+        .filter((row) => !purposes || purposes.includes(row.purpose))
         .reduce((sum, row) => sum + (row.costUsd ?? 0), 0),
+    );
+  }
+
+  listModelEvaluations(limit: number) {
+    return this.read((state) => newest(state.modelEvaluations).slice(0, limit));
+  }
+
+  listVotes(limit: number) {
+    return this.read((state) => newest(state.aiVotes).slice(0, limit));
+  }
+
+  listConsensus(limit: number) {
+    return this.read((state) => newest(state.aiConsensus).slice(0, limit));
+  }
+
+  recordModelEvaluations(rows: ModelEvaluationDraft[]) {
+    return this.update((state) => {
+      for (const row of rows) {
+        state.modelEvaluations.push({ ...row, id: randomUUID(), createdAt: new Date().toISOString() });
+      }
+    });
+  }
+
+  recordVote(row: AiVoteDraft) {
+    return this.update((state) => {
+      const id = randomUUID();
+      state.aiVotes.push({ ...row, id, createdAt: new Date().toISOString() });
+      return id;
+    });
+  }
+
+  recordConsensus(row: AiConsensusDraft) {
+    return this.update((state) => {
+      state.aiConsensus.push({ ...row, id: randomUUID(), createdAt: new Date().toISOString() });
+    });
+  }
+
+  webSearchCountSince(since: Date) {
+    return this.read(
+      (state) => state.aiRequests.filter((row) => row.webSearch && row.createdAt >= since.toISOString()).length,
     );
   }
 
@@ -149,7 +225,9 @@ export class FileAdminStore implements AdminStore {
 
   recordAiRequest(row: AiRequestDraft) {
     return this.update((state) => {
-      state.aiRequests.push({ ...row, id: randomUUID(), createdAt: new Date().toISOString() });
+      const id = randomUUID();
+      state.aiRequests.push({ ...row, id, createdAt: new Date().toISOString() });
+      return id;
     });
   }
 
@@ -223,9 +301,21 @@ export class FileAdminStore implements AdminStore {
   private async load(): Promise<FileState> {
     try {
       const raw = await readFile(this.filePath, "utf8");
-      const parsed = JSON.parse(raw) as FileState;
+      const parsed = JSON.parse(raw) as Partial<FileState>;
       if (!parsed.settings || !Array.isArray(parsed.apiUsage)) return emptyState();
-      return parsed;
+      return {
+        settings: parsed.settings,
+        apiUsage: parsed.apiUsage,
+        aiRequests: (parsed.aiRequests ?? []).map(normalizeAiRequest),
+        modelEvaluations: parsed.modelEvaluations ?? [],
+        aiVotes: parsed.aiVotes ?? [],
+        aiConsensus: parsed.aiConsensus ?? [],
+        jobRuns: parsed.jobRuns ?? [],
+        audit: parsed.audit ?? [],
+        events: parsed.events ?? [],
+        predictions: parsed.predictions ?? [],
+        statsEpochStartedAt: parsed.statsEpochStartedAt ?? null,
+      };
     } catch (error) {
       if (isMissingFile(error)) return emptyState();
       throw error;
@@ -236,6 +326,18 @@ export class FileAdminStore implements AdminStore {
     await mkdir(path.dirname(this.filePath), { recursive: true });
     await writeFile(this.filePath, JSON.stringify(state, null, 2));
   }
+}
+
+function statsEpoch(state: FileState): StatsEpoch {
+  const counts = countEpoch(
+    state.predictions.map((prediction) => prediction.publishedAt),
+    state.statsEpochStartedAt,
+  );
+  return {
+    startedAt: state.statsEpochStartedAt,
+    predictions: counts.included,
+    archivedPredictions: counts.archived,
+  };
 }
 
 function newest<T extends { createdAt?: string; startedAt?: string | null; id: string }>(rows: T[]): T[] {
@@ -278,6 +380,16 @@ function candidates(state: FileState, now: Date): SettlementCandidate[] {
       },
     ];
   });
+}
+
+function normalizeAiRequest(row: AiRequestRecord): AiRequestRecord {
+  const purpose = row.purpose === "vote" || row.purpose === "research" || row.purpose === "value_check" ? row.purpose : "value_check";
+  return {
+    ...row,
+    webSearch: row.webSearch ?? false,
+    sources: row.sources ?? [],
+    purpose,
+  };
 }
 
 function isMissingFile(error: unknown): boolean {

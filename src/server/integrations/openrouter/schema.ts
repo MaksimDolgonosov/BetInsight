@@ -17,6 +17,32 @@ export const predictionSchema = z.object({
 
 export type PredictionResult = z.infer<typeof predictionSchema>;
 
+export const voteSchema = z.object({
+  probabilities: z
+    .array(
+      z.object({
+        market: z.enum(["h2h", "totals"]),
+        selection: z.enum(["home", "draw", "away", "over", "under"]),
+        point: z.number().nullable(),
+        p: z.number().min(0).max(1),
+      }),
+    )
+    .min(2)
+    .max(3),
+  pick: z.object({
+    market: z.enum(["h2h", "totals"]),
+    selection: z.enum(["home", "draw", "away", "over", "under"]),
+    point: z.number().nullable(),
+  }),
+  confidence: z.enum(["low", "medium", "high"]),
+  reasoning: z.object({
+    ru: z.string().min(1).max(600),
+    en: z.string().min(1).max(600),
+  }),
+});
+
+export type VoteResult = z.infer<typeof voteSchema>;
+
 export const predictionJsonSchema = {
   type: "object",
   additionalProperties: false,
@@ -44,5 +70,49 @@ export const predictionJsonSchema = {
       },
     },
     skip: { type: "boolean" },
+  },
+} as const;
+
+export const voteJsonSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["probabilities", "pick", "confidence", "reasoning"],
+  properties: {
+    probabilities: {
+      type: "array",
+      minItems: 2,
+      maxItems: 3,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["market", "selection", "point", "p"],
+        properties: {
+          market: { type: "string", enum: ["h2h", "totals"] },
+          selection: { type: "string", enum: ["home", "draw", "away", "over", "under"] },
+          point: { type: ["number", "null"] },
+          p: { type: "number" },
+        },
+      },
+    },
+    pick: {
+      type: "object",
+      additionalProperties: false,
+      required: ["market", "selection", "point"],
+      properties: {
+        market: { type: "string", enum: ["h2h", "totals"] },
+        selection: { type: "string", enum: ["home", "draw", "away", "over", "under"] },
+        point: { type: ["number", "null"] },
+      },
+    },
+    confidence: { type: "string", enum: ["low", "medium", "high"] },
+    reasoning: {
+      type: "object",
+      additionalProperties: false,
+      required: ["ru", "en"],
+      properties: {
+        ru: { type: "string" },
+        en: { type: "string" },
+      },
+    },
   },
 } as const;

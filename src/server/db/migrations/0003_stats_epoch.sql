@@ -1,0 +1,1 @@
+ALTER TABLE "app_settings" ADD COLUMN "stats_epoch_started_at" timestamp with time zone;

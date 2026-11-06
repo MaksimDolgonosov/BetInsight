@@ -1,6 +1,7 @@
 import { auth } from "@/server/auth";
 import { startTestRun } from "@/server/admin/test-run";
 import { MARKETS } from "@/server/domain/settings";
+import type { TestTrack } from "@/server/admin/test-events";
 import { z } from "zod";
 
 export const maxDuration = 300;
@@ -8,6 +9,7 @@ export const maxDuration = 300;
 const bodySchema = z.object({
   sportKey: z.string().regex(/^[a-z0-9_]{3,80}$/),
   markets: z.array(z.enum(MARKETS)).min(1),
+  tracks: z.array(z.enum(["value", "ai_pick"])).min(1),
 });
 
 export async function POST(request: Request) {
@@ -28,6 +30,7 @@ export async function POST(request: Request) {
   const result = await startTestRun({
     sportKey: parsed.data.sportKey,
     markets: parsed.data.markets,
+    tracks: parsed.data.tracks as TestTrack[],
     actor: session.user.email ?? "admin",
   });
   if ("error" in result) {

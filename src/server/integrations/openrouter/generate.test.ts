@@ -22,9 +22,9 @@ describe("generatePrediction", () => {
       async () => {
         calls.push("send");
         if (calls.length === 1) {
-          return { content: "{\"skip\":", model: "anthropic/claude-sonnet-5.5", tokensIn: 10, tokensOut: 2, costUsd: 0.001 };
+          return { content: "{\"skip\":", model: "anthropic/claude-sonnet-5.5", tokensIn: 10, tokensOut: 2, costUsd: 0.001, sources: [] };
         }
-        return { content: valid, model: "anthropic/claude-sonnet-5.5", tokensIn: 10, tokensOut: 20, costUsd: 0.002 };
+        return { content: valid, model: "anthropic/claude-sonnet-5.5", tokensIn: 10, tokensOut: 20, costUsd: 0.002, sources: [] };
       },
     );
 
@@ -43,7 +43,7 @@ describe("generatePrediction", () => {
         webSearch: false,
         payload: {},
       },
-      async () => ({ content: "{}", model: "test", tokensIn: 1, tokensOut: 1, costUsd: null }),
+      async () => ({ content: "{}", model: "test", tokensIn: 1, tokensOut: 1, costUsd: null, sources: [] }),
     );
 
     expect(result.parsed).toBeNull();

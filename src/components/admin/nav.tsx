@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 const links = [
   { href: "/admin", key: "overview" },
   { href: "/admin/settings", key: "settings" },
+  { href: "/admin/tracks", key: "tracks" },
   { href: "/admin/budget", key: "budget" },
   { href: "/admin/jobs", key: "jobs" },
   { href: "/admin/settlement", key: "settlement" },

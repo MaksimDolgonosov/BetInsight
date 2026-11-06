@@ -1,25 +1,37 @@
 import { and, desc, eq, gte, isNotNull } from "drizzle-orm";
 import { getDb } from "@/server/db";
-import { aiRequests, apiUsage, appSettings, auditLog, events, jobRuns, predictions, sports } from "@/server/db/schema";
+import { aiConsensus, aiRequests, aiVotes, apiUsage, appSettings, auditLog, events, jobRuns, modelEvaluations, predictions, sports } from "@/server/db/schema";
 import { startOfUtcDay } from "@/server/budget/budget";
 import {
+  aiPickFromEnv,
   defaultSettings,
+  hydrateSettings,
+  isSportGroup,
+  SPORT_GROUPS,
   type AdminSettings,
   type LeagueSetting,
   type Market,
-  type SportGroup,
   type SportThresholds,
 } from "@/server/domain/settings";
+import { countEpoch } from "@/server/domain/stats/epoch";
 import { decideSettlement } from "@/server/domain/settlement/profit";
 import { testRunAllowance } from "@/server/admin/rate-limit";
 import {
   TEST_RUN_ENDPOINT,
   type AdminStore,
+  type AiConsensusDraft,
+  type AiConsensusRecord,
+  type AiPurpose,
   type AiRequestDraft,
   type AiRequestRecord,
+  type AiVoteDraft,
+  type AiVoteRecord,
   type ApiUsageRecord,
+  type ModelEvaluationDraft,
+  type ModelEvaluationRecord,
   type JobRunRecord,
   type JobStatus,
+  type StatsEpoch,
   type UsageDraft,
 } from "@/server/admin/types";
 
@@ -33,6 +45,32 @@ export class DrizzleAdminStore implements AdminStore {
       const row = await ensureSettings(db);
       const sportRows = await db.select().from(sports);
       return toSettings(row, sportRows);
+    });
+  }
+
+  getStatsEpoch() {
+    return this.withDb((db) => readStatsEpoch(db));
+  }
+
+  resetStatsEpoch(input: { actor: string; now: Date }) {
+    return this.withDb(async (db) => {
+      await ensureSettings(db);
+      const before = await readStatsEpoch(db);
+      await db
+        .update(appSettings)
+        .set({ statsEpochStartedAt: input.now, updatedAt: input.now })
+        .where(eq(appSettings.id, 1));
+      await db.insert(auditLog).values({
+        actor: input.actor,
+        action: "stats.reset",
+        entity: "app_settings",
+        payload: {
+          startedAt: input.now.toISOString(),
+          previousStartedAt: before.startedAt,
+          archivedPredictions: before.predictions,
+        },
+      });
+      return readStatsEpoch(db);
     });
   }
 
@@ -96,13 +134,68 @@ export class DrizzleAdminStore implements AdminStore {
     });
   }
 
-  aiSpendSince(since: Date) {
+  aiSpendSince(since: Date, purposes?: AiPurpose[]) {
     return this.withDb(async (db) => {
       const rows = await db
-        .select({ costUsd: aiRequests.costUsd })
+        .select({ costUsd: aiRequests.costUsd, purpose: aiRequests.purpose })
         .from(aiRequests)
         .where(gte(aiRequests.createdAt, since));
-      return rows.reduce((sum, row) => sum + (row.costUsd ?? 0), 0);
+      return rows.reduce((sum, row) => {
+        if (purposes && !purposes.includes(asPurpose(row.purpose))) return sum;
+        return sum + (row.costUsd ?? 0);
+      }, 0);
+    });
+  }
+
+  listModelEvaluations(limit: number) {
+    return this.withDb(async (db) => {
+      const rows = await db.select().from(modelEvaluations).orderBy(desc(modelEvaluations.createdAt)).limit(limit);
+      return rows.map(toEvaluation);
+    });
+  }
+
+  listVotes(limit: number) {
+    return this.withDb(async (db) => {
+      const rows = await db.select().from(aiVotes).orderBy(desc(aiVotes.createdAt)).limit(limit);
+      return rows.map(toVote);
+    });
+  }
+
+  listConsensus(limit: number) {
+    return this.withDb(async (db) => {
+      const rows = await db.select().from(aiConsensus).orderBy(desc(aiConsensus.createdAt)).limit(limit);
+      return rows.map(toConsensus);
+    });
+  }
+
+  recordModelEvaluations(rows: ModelEvaluationDraft[]) {
+    return this.withDb(async (db) => {
+      if (rows.length === 0) return;
+      await db.insert(modelEvaluations).values(rows);
+    });
+  }
+
+  recordVote(row: AiVoteDraft) {
+    return this.withDb(async (db) => {
+      const [inserted] = await db.insert(aiVotes).values(row).returning({ id: aiVotes.id });
+      if (!inserted) throw new Error("ai vote was not stored");
+      return inserted.id;
+    });
+  }
+
+  recordConsensus(row: AiConsensusDraft) {
+    return this.withDb(async (db) => {
+      await db.insert(aiConsensus).values(row);
+    });
+  }
+
+  webSearchCountSince(since: Date) {
+    return this.withDb(async (db) => {
+      const rows = await db
+        .select({ webSearch: aiRequests.webSearch })
+        .from(aiRequests)
+        .where(gte(aiRequests.createdAt, since));
+      return rows.filter((row) => row.webSearch).length;
     });
   }
 
@@ -214,18 +307,26 @@ export class DrizzleAdminStore implements AdminStore {
 
   recordAiRequest(row: AiRequestDraft) {
     return this.withDb(async (db) => {
-      await db.insert(aiRequests).values({
-        eventId: row.eventId,
-        model: row.model,
-        promptVersion: row.promptVersion,
-        tokensIn: row.tokensIn,
-        tokensOut: row.tokensOut,
-        costUsd: row.costUsd,
-        latencyMs: row.latencyMs,
-        rawResponse: row.rawResponse,
-        error: row.error,
-        source: row.source,
-      });
+      const [inserted] = await db
+        .insert(aiRequests)
+        .values({
+          eventId: row.eventId,
+          model: row.model,
+          promptVersion: row.promptVersion,
+          tokensIn: row.tokensIn,
+          tokensOut: row.tokensOut,
+          costUsd: row.costUsd,
+          latencyMs: row.latencyMs,
+          rawResponse: row.rawResponse,
+          error: row.error,
+          webSearch: row.webSearch,
+          sources: row.sources,
+          purpose: row.purpose,
+          source: row.source,
+        })
+        .returning({ id: aiRequests.id });
+      if (!inserted) throw new Error("ai request was not stored");
+      return inserted.id;
     });
   }
 
@@ -289,11 +390,59 @@ export class DrizzleAdminStore implements AdminStore {
   }
 }
 
+async function readStatsEpoch(db: Database): Promise<StatsEpoch> {
+  await ensureSettings(db);
+  const [settings] = await db
+    .select({ startedAt: appSettings.statsEpochStartedAt })
+    .from(appSettings)
+    .where(eq(appSettings.id, 1))
+    .limit(1);
+  const rows = await db.select({ publishedAt: predictions.publishedAt }).from(predictions);
+  const counts = countEpoch(
+    rows.map((row) => row.publishedAt),
+    settings?.startedAt ?? null,
+  );
+  return {
+    startedAt: settings?.startedAt?.toISOString() ?? null,
+    predictions: counts.included,
+    archivedPredictions: counts.archived,
+  };
+}
+
 async function ensureSettings(db: Database) {
   const settings = defaultSettings(process.env.OPENROUTER_MODEL || undefined);
-  const [existing] = await db.select().from(appSettings).where(eq(appSettings.id, 1)).limit(1);
+  let [existing] = await db.select().from(appSettings).where(eq(appSettings.id, 1)).limit(1);
   if (!existing) {
     await db.insert(appSettings).values(toSettingsRow(settings)).onConflictDoNothing();
+  } else if (!existing.aiPickConfigured) {
+    const seeded = aiPickFromEnv({
+      enabled: existing.aiPickEnabled,
+      models: threeModels(existing.aiPickModels, settings.aiPick.models),
+      researchModel: existing.aiPickResearchModel,
+      consensusMode: existing.aiPickConsensusMode === "unanimous" ? "unanimous" : "two_thirds",
+      probabilityTolerance: existing.aiPickProbabilityTolerance,
+      oddsMin: existing.aiPickOddsMin,
+      oddsMax: existing.aiPickOddsMax,
+      minEv: existing.aiPickMinEv,
+      shortlistSize: existing.aiPickShortlistSize,
+      dailyLimit: existing.aiPickDailyLimit,
+      monthlyBudgetUsd: existing.aiPickMonthlyBudgetUsd,
+    });
+    await db
+      .update(appSettings)
+      .set({
+        aiPickModels: [...seeded.models],
+        aiPickResearchModel: seeded.researchModel,
+        aiPickConfigured: true,
+        updatedAt: new Date(),
+      })
+      .where(eq(appSettings.id, 1));
+    existing = {
+      ...existing,
+      aiPickModels: [...seeded.models],
+      aiPickResearchModel: seeded.researchModel,
+      aiPickConfigured: true,
+    };
   }
   const [sport] = await db.select({ key: sports.key }).from(sports).limit(1);
   if (!sport) {
@@ -326,6 +475,19 @@ function toSettingsRow(settings: AdminSettings) {
     llmModel: settings.llmModel,
     promptVersion: settings.promptVersion,
     webSearchEnabled: settings.webSearchEnabled,
+    webSearchDailyLimit: settings.webSearchDailyLimit,
+    aiPickEnabled: settings.aiPick.enabled,
+    aiPickModels: [...settings.aiPick.models],
+    aiPickResearchModel: settings.aiPick.researchModel,
+    aiPickConsensusMode: settings.aiPick.consensusMode,
+    aiPickProbabilityTolerance: settings.aiPick.probabilityTolerance,
+    aiPickOddsMin: settings.aiPick.oddsMin,
+    aiPickOddsMax: settings.aiPick.oddsMax,
+    aiPickMinEv: settings.aiPick.minEv,
+    aiPickShortlistSize: settings.aiPick.shortlistSize,
+    aiPickDailyLimit: settings.aiPick.dailyLimit,
+    aiPickMonthlyBudgetUsd: settings.aiPick.monthlyBudgetUsd,
+    aiPickConfigured: true,
     monthlyCreditLimit: settings.monthlyCreditLimit,
     reserveCredits: settings.reserveCredits,
     testRunsPerDay: settings.testRunsPerDay,
@@ -344,21 +506,36 @@ function toSettings(
     return [{ key: sport.key, group: sport.group, title: sport.title, enabled: sport.enabledByAdmin }];
   });
 
-  return {
+  const thresholds = Object.fromEntries(
+    SPORT_GROUPS.map((group) => [group, mergeThresholds(row.thresholds?.[group], defaults.thresholds[group])]),
+  ) as AdminSettings["thresholds"];
+
+  return hydrateSettings({
     region: row.region || defaults.region,
     markets: markets.length > 0 ? markets : defaults.markets,
     leagues: leagues.length > 0 ? leagues : defaults.leagues,
-    thresholds: {
-      soccer: mergeThresholds(row.thresholds?.soccer, defaults.thresholds.soccer),
-      basketball: mergeThresholds(row.thresholds?.basketball, defaults.thresholds.basketball),
-    },
+    thresholds,
     llmModel: row.llmModel || defaults.llmModel,
     promptVersion: row.promptVersion || defaults.promptVersion,
     webSearchEnabled: row.webSearchEnabled,
+    webSearchDailyLimit: row.webSearchDailyLimit,
+    aiPick: {
+      enabled: row.aiPickEnabled,
+      models: threeModels(row.aiPickModels, defaults.aiPick.models),
+      researchModel: row.aiPickResearchModel ?? defaults.aiPick.researchModel,
+      consensusMode: row.aiPickConsensusMode === "unanimous" ? "unanimous" : "two_thirds",
+      probabilityTolerance: row.aiPickProbabilityTolerance,
+      oddsMin: row.aiPickOddsMin,
+      oddsMax: row.aiPickOddsMax,
+      minEv: row.aiPickMinEv,
+      shortlistSize: row.aiPickShortlistSize,
+      dailyLimit: row.aiPickDailyLimit,
+      monthlyBudgetUsd: row.aiPickMonthlyBudgetUsd,
+    },
     monthlyCreditLimit: row.monthlyCreditLimit,
     reserveCredits: row.reserveCredits,
     testRunsPerDay: row.testRunsPerDay,
-  };
+  });
 }
 
 function mergeThresholds(value: SportThresholds | undefined, fallback: SportThresholds): SportThresholds {
@@ -398,9 +575,87 @@ function toAiRequest(row: typeof aiRequests.$inferSelect): AiRequestRecord {
     latencyMs: row.latencyMs,
     rawResponse: row.rawResponse,
     error: row.error,
+    webSearch: row.webSearch,
+    sources: row.sources ?? [],
+    purpose: asPurpose(row.purpose),
     source: row.source === "test" ? "test" : "job",
     createdAt: row.createdAt.toISOString(),
   };
+}
+
+function toEvaluation(row: typeof modelEvaluations.$inferSelect): ModelEvaluationRecord {
+  return {
+    id: row.id,
+    eventId: row.eventId,
+    home: row.home,
+    away: row.away,
+    market: row.market,
+    outcome: row.outcome,
+    point: row.point,
+    consensusProb: row.consensusProb,
+    bestPrice: row.bestPrice,
+    bestBookmaker: row.bestBookmaker,
+    ev: row.ev,
+    isCandidate: row.isCandidate,
+    nearMiss: row.nearMiss,
+    aiPickShortlisted: row.aiPickShortlisted,
+    source: row.source === "test" ? "test" : "job",
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+function toVote(row: typeof aiVotes.$inferSelect): AiVoteRecord {
+  return {
+    id: row.id,
+    eventId: row.eventId,
+    aiRequestId: row.aiRequestId,
+    model: row.model,
+    market: row.market,
+    selection: row.selection,
+    point: row.point,
+    probabilities: row.probabilities,
+    confidence: row.confidence,
+    reasoningRu: row.reasoningRu,
+    reasoningEn: row.reasoningEn,
+    source: row.source === "test" ? "test" : "job",
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+function toConsensus(row: typeof aiConsensus.$inferSelect): AiConsensusRecord {
+  return {
+    id: row.id,
+    eventId: row.eventId,
+    home: row.home,
+    away: row.away,
+    models: row.models ?? [],
+    voteIds: row.voteIds ?? [],
+    votesFor: row.votesFor,
+    votesTotal: row.votesTotal,
+    pAiMean: row.pAiMean,
+    pAiMin: row.pAiMin,
+    status: row.status === "consensus" ? "consensus" : "no_consensus",
+    market: row.market,
+    selection: row.selection,
+    point: row.point,
+    bestPrice: row.bestPrice,
+    confidence: row.confidence,
+    reasoningRu: row.reasoningRu,
+    reasoningEn: row.reasoningEn,
+    matchesMarketFavorite: row.matchesMarketFavorite,
+    source: row.source === "test" ? "test" : "job",
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+function threeModels(value: string[] | null, fallback: [string, string, string]): [string, string, string] {
+  if (!value || value.length !== 3) return fallback;
+  return [value[0] || fallback[0], value[1] || fallback[1], value[2] || fallback[2]];
+}
+
+function asPurpose(value: string): AiPurpose {
+  if (value === "vote" || value === "research" || value === "value_check") return value;
+  return "value_check";
 }
 
 function toJobRun(row: typeof jobRuns.$inferSelect): JobRunRecord {
@@ -418,10 +673,6 @@ function toJobRun(row: typeof jobRuns.$inferSelect): JobRunRecord {
 
 function isMarket(value: string): value is Market {
   return value === "h2h" || value === "totals";
-}
-
-function isSportGroup(value: string): value is SportGroup {
-  return value === "soccer" || value === "basketball";
 }
 
 function isJobStatus(value: string): value is JobStatus {

@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { JsonBlock } from "@/components/admin/json-block";
 import { Button } from "@/components/ui/button";
-import type { TestStreamEvent } from "@/server/admin/test-events";
+import type { TestStreamEvent, TestTrack } from "@/server/admin/test-events";
 import type { Market } from "@/server/domain/settings";
 import { useLocale, useTranslations } from "next-intl";
 
@@ -17,6 +17,7 @@ export function TestRunner({
   remaining,
   reserve,
   lastRemaining,
+  aiPickEnabled,
   timeZone,
 }: {
   leagues: League[];
@@ -26,6 +27,7 @@ export function TestRunner({
   remaining: number;
   reserve: number;
   lastRemaining: number | null;
+  aiPickEnabled: boolean;
   timeZone: string;
 }) {
   const t = useTranslations("admin.test");
@@ -40,7 +42,11 @@ export function TestRunner({
   const [error, setError] = useState<string | null>(null);
   const [odds, setOdds] = useState<Extract<TestStreamEvent, { type: "odds" }> | null>(null);
   const [model, setModel] = useState<Extract<TestStreamEvent, { type: "model" }> | null>(null);
+  const [tracks, setTracks] = useState<TestTrack[]>(aiPickEnabled ? ["ai_pick"] : []);
   const [predictions, setPredictions] = useState<Extract<TestStreamEvent, { type: "prediction" }>[]>([]);
+  const [research, setResearch] = useState<Extract<TestStreamEvent, { type: "research" }>[]>([]);
+  const [votes, setVotes] = useState<Extract<TestStreamEvent, { type: "vote" }>[]>([]);
+  const [consensus, setConsensus] = useState<Extract<TestStreamEvent, { type: "consensus" }>[]>([]);
   const [notes, setNotes] = useState<string[]>([]);
 
   const cost = mocked ? 0 : selected.length;
@@ -60,19 +66,26 @@ export function TestRunner({
     setSelected((current) => (current.includes(market) ? current.filter((item) => item !== market) : [...current, market]));
   }
 
+  function toggleTrack(track: TestTrack) {
+    setTracks((current) => (current.includes(track) ? current.filter((item) => item !== track) : [...current, track]));
+  }
+
   async function run() {
     setRunning(true);
     setError(null);
     setOdds(null);
     setModel(null);
     setPredictions([]);
+    setResearch([]);
+    setVotes([]);
+    setConsensus([]);
     setNotes([]);
 
     try {
       const response = await fetch("/api/admin/test-run", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ sportKey, markets: selected }),
+        body: JSON.stringify({ sportKey, markets: selected, tracks }),
       });
       if (!response.ok || !response.body) {
         const body = (await response.json().catch(() => null)) as { error?: string } | null;
@@ -95,6 +108,9 @@ export function TestRunner({
           if (event.type === "odds") setOdds(event);
           if (event.type === "model") setModel(event);
           if (event.type === "prediction") setPredictions((current) => [...current, event]);
+          if (event.type === "research") setResearch((current) => [...current, event]);
+          if (event.type === "vote") setVotes((current) => [...current, event]);
+          if (event.type === "consensus") setConsensus((current) => [...current, event]);
           if (event.type === "note") setNotes((current) => [...current, t(event.code)]);
           if (event.type === "error") setError(errorText(te, event.code));
         }
@@ -142,6 +158,23 @@ export function TestRunner({
               ))}
             </div>
           </div>
+          <div className="flex flex-col gap-1.5 text-sm md:col-span-2">
+            <span className="font-medium">{t("tracks")}</span>
+            <div className="flex h-9 items-center gap-4">
+              {(["value", "ai_pick"] as const).map((track) => (
+                <label key={track} className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    className="size-4"
+                    checked={tracks.includes(track)}
+                    disabled={running || (track === "ai_pick" && !aiPickEnabled)}
+                    onChange={() => toggleTrack(track)}
+                  />
+                  {t(track)}
+                </label>
+              ))}
+            </div>
+          </div>
         </div>
         <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
           <Info label={t("region")} value={region} />
@@ -152,7 +185,7 @@ export function TestRunner({
         {mocked ? <p className="mt-3 text-sm text-muted-foreground">{t("mocked")}</p> : null}
         {blocked ? <p className="mt-3 text-sm text-destructive">{te("reserve")}</p> : null}
         {error ? <p className="mt-3 text-sm text-destructive">{error}</p> : null}
-        <Button className="mt-4" type="button" disabled={running || blocked || !sportKey || selected.length === 0} onClick={run}>
+        <Button className="mt-4" type="button" disabled={running || blocked || !sportKey || selected.length === 0 || tracks.length === 0} onClick={run}>
           {running ? t("running") : t("run")}
         </Button>
       </section>
@@ -217,6 +250,8 @@ export function TestRunner({
                   <th className="px-2 py-2 font-medium">{t("bestPrice")}</th>
                   <th className="px-2 py-2 font-medium">EV</th>
                   <th className="px-2 py-2 font-medium">{t("candidate")}</th>
+                  <th className="px-2 py-2 font-medium">{t("nearMiss")}</th>
+                  <th className="px-2 py-2 font-medium">{t("shortlist")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -233,6 +268,8 @@ export function TestRunner({
                     </td>
                     <td className="px-2 py-3">{percentFormat.format(row.ev)}</td>
                     <td className="px-2 py-3">{row.candidate ? t("yes") : t("no")}</td>
+                    <td className="px-2 py-3">{row.nearMiss ? t("yes") : t("no")}</td>
+                    <td className="px-2 py-3">{row.aiPickShortlisted ? t("yes") : t("no")}</td>
                   </tr>
                 ))}
               </tbody>
@@ -250,7 +287,7 @@ export function TestRunner({
         return (
           <section key={prediction.eventId} className="flex flex-col gap-3 rounded-xl border bg-card p-4 md:p-6">
             <h2 className="text-base font-semibold">
-              {t("aiTitle")}: {prediction.home} — {prediction.away}
+              {t("valueTitle")}: {prediction.home} — {prediction.away}
             </h2>
             <dl className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
               <Info label={t("model")} value={prediction.model} />
@@ -258,6 +295,7 @@ export function TestRunner({
               <Info label={t("tokens")} value={`${prediction.tokensIn ?? "—"} / ${prediction.tokensOut ?? "—"}`} />
               <Info label={t("cost")} value={prediction.costUsd == null ? "—" : usdFormat.format(prediction.costUsd)} />
               <Info label={t("latency")} value={t("milliseconds", { count: prediction.latencyMs })} />
+              <Info label={t("webSearchUsed")} value={prediction.webSearch ? t("yes") : t("no")} />
             </dl>
             {prediction.validationError ? (
               <p className="text-sm text-destructive">
@@ -280,6 +318,90 @@ export function TestRunner({
               </div>
             ) : null}
             <JsonBlock value={prediction.raw} summary={t("rawModel")} copyLabel={t("copy")} copiedLabel={t("copied")} />
+          </section>
+        );
+      })}
+
+      {research.map((item) => (
+        <section key={`research-${item.eventId}`} className="flex flex-col gap-3 rounded-xl border bg-card p-4 md:p-6">
+          <h2 className="text-base font-semibold">{t("researchTitle")}: {item.home} — {item.away}</h2>
+          <dl className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+            <Info label={t("model")} value={item.model} />
+            <Info label={t("prompt")} value={item.promptVersion} />
+            <Info label={t("tokens")} value={`${item.tokensIn ?? "—"} / ${item.tokensOut ?? "—"}`} />
+            <Info label={t("cost")} value={item.costUsd == null ? "—" : usdFormat.format(item.costUsd)} />
+            <Info label={t("webSearchUsed")} value={item.webSearch ? t("yes") : t("no")} />
+          </dl>
+          {item.error ? <p className="text-sm text-destructive">{item.error}</p> : null}
+          {item.text ? <p className="text-sm text-muted-foreground whitespace-pre-wrap">{item.text}</p> : null}
+          {item.sources.length > 0 ? (
+            <ul className="flex flex-col gap-1 text-sm">
+              {item.sources.map((source) => (
+                <li key={source} className="truncate text-muted-foreground">{source}</li>
+              ))}
+            </ul>
+          ) : null}
+        </section>
+      ))}
+
+      {votes.map((vote) => {
+        const reasoning = vote.parsed?.reasoning[locale === "ru" ? "ru" : "en"];
+        return (
+          <section key={`vote-${vote.eventId}-${vote.model}`} className="flex flex-col gap-3 rounded-xl border bg-card p-4 md:p-6">
+            <h2 className="text-base font-semibold">{t("voteTitle")}: {vote.home} — {vote.away}</h2>
+            <dl className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+              <Info label={t("model")} value={vote.model} />
+              <Info label={t("prompt")} value={vote.promptVersion} />
+              <Info label={t("tokens")} value={`${vote.tokensIn ?? "—"} / ${vote.tokensOut ?? "—"}`} />
+              <Info label={t("cost")} value={vote.costUsd == null ? "—" : usdFormat.format(vote.costUsd)} />
+            </dl>
+            {vote.validationError ? <p className="text-sm text-destructive">{t("validationError")}: {vote.validationError}</p> : null}
+            {vote.parsed ? (
+              <div className="text-sm">
+                <p>
+                  {marketLabels(vote.parsed.pick.market)} · {selections(vote.parsed.pick.selection)}
+                  {vote.parsed.pick.point != null ? ` ${vote.parsed.pick.point}` : ""}
+                  {" · "}
+                  {confidence(vote.parsed.confidence)}
+                </p>
+                <ul className="mt-2 text-muted-foreground">
+                  {vote.parsed.probabilities.map((item) => (
+                    <li key={`${item.market}-${item.selection}-${item.point ?? ""}`}>
+                      {marketLabels(item.market)} · {selections(item.selection)}
+                      {item.point != null ? ` ${item.point}` : ""}: {percentFormat.format(item.p)}
+                    </li>
+                  ))}
+                </ul>
+                {reasoning ? <p className="mt-2 text-muted-foreground">{reasoning}</p> : null}
+              </div>
+            ) : null}
+            <JsonBlock value={vote.raw} summary={t("rawModel")} copyLabel={t("copy")} copiedLabel={t("copied")} />
+          </section>
+        );
+      })}
+
+      {consensus.map((item) => {
+        const reasoning = item.reasoning?.[locale === "ru" ? "ru" : "en"];
+        return (
+          <section key={`consensus-${item.eventId}`} className="flex flex-col gap-3 rounded-xl border bg-card p-4 md:p-6">
+            <h2 className="text-base font-semibold">{t("consensusTitle")}: {item.home} — {item.away}</h2>
+            <p className="text-sm">{item.status === "consensus" ? t("consensusYes") : t("consensusNo")}</p>
+            <dl className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+              <Info label={t("votes")} value={`${item.votesFor} / ${item.votesTotal}`} />
+              <Info label={t("aiProbability")} value={item.pAiMean == null ? "—" : percentFormat.format(item.pAiMean)} />
+              <Info label={t("minProbability")} value={item.pAiMin == null ? "—" : percentFormat.format(item.pAiMin)} />
+              <Info label={t("bestPrice")} value={item.bestPrice == null ? "—" : numberFormat.format(item.bestPrice)} />
+            </dl>
+            {item.pick ? (
+              <p className="text-sm">
+                {marketLabels(item.pick.market)} · {selections(item.pick.selection)}
+                {item.pick.point != null ? ` ${item.pick.point}` : ""}
+                {item.confidence ? ` · ${confidence(item.confidence)}` : ""}
+              </p>
+            ) : null}
+            {item.matchesMarketFavorite ? <p className="text-sm text-muted-foreground">{t("matchesFavorite")}</p> : null}
+            {reasoning ? <p className="text-sm text-muted-foreground">{reasoning}</p> : null}
+            <p className="text-sm text-muted-foreground">{t("notPublished")}</p>
           </section>
         );
       })}

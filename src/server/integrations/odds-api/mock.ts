@@ -1,16 +1,38 @@
 export function mockOddsPayload(sportKey: string) {
-  const basketball = sportKey.startsWith("basketball");
-  const first = basketball
-    ? { home: "Real Madrid", away: "Olympiacos", point: 164.5 }
-    : { home: "Barcelona", away: "Real Madrid", point: 2.5 };
-  const second = basketball
-    ? { home: "Fenerbahce", away: "Panathinaikos", point: 158.5 }
-    : { home: "Bayern Munich", away: "Dortmund", point: 3.5 };
-
+  const profile = mockProfile(sportKey);
   return [
-    event(sportKey, "mock-event-1", first.home, first.away, 6, first.point, basketball, 1.72, 2.14),
-    event(sportKey, "mock-event-2", second.home, second.away, 28, second.point, basketball, 1.55, 2.48),
+    event(sportKey, "mock-event-1", profile.first.home, profile.first.away, 6, profile.first.point, profile.twoWay, 1.72, 2.14),
+    event(sportKey, "mock-event-2", profile.second.home, profile.second.away, 28, profile.second.point, profile.twoWay, 1.55, 2.48),
   ];
+}
+
+function mockProfile(sportKey: string) {
+  if (sportKey.startsWith("basketball_nba")) {
+    return {
+      twoWay: true,
+      first: { home: "Boston Celtics", away: "Dallas Mavericks", point: 224.5 },
+      second: { home: "Denver Nuggets", away: "Milwaukee Bucks", point: 230.5 },
+    };
+  }
+  if (sportKey.startsWith("basketball")) {
+    return {
+      twoWay: true,
+      first: { home: "Real Madrid", away: "Olympiacos", point: 164.5 },
+      second: { home: "Fenerbahce", away: "Panathinaikos", point: 158.5 },
+    };
+  }
+  if (sportKey.startsWith("tennis")) {
+    return {
+      twoWay: true,
+      first: { home: "Jannik Sinner", away: "Carlos Alcaraz", point: 22.5 },
+      second: { home: "Novak Djokovic", away: "Alexander Zverev", point: 21.5 },
+    };
+  }
+  return {
+    twoWay: false,
+    first: { home: "Barcelona", away: "Real Madrid", point: 2.5 },
+    second: { home: "Bayern Munich", away: "Dortmund", point: 3.5 },
+  };
 }
 
 function event(
@@ -20,7 +42,7 @@ function event(
   away: string,
   hoursAhead: number,
   point: number,
-  basketball: boolean,
+  twoWay: boolean,
   homePrice: number,
   awayPrice: number,
 ) {
@@ -31,9 +53,9 @@ function event(
     home_team: home,
     away_team: away,
     bookmakers: [
-      bookmaker("pinnacle", "Pinnacle", home, away, basketball, homePrice, awayPrice, point),
-      bookmaker("bet365", "Bet365", home, away, basketball, homePrice - 0.02, awayPrice + 0.02, point),
-      bookmaker("unibet", "Unibet", home, away, basketball, homePrice + 0.02, awayPrice - 0.04, point),
+      bookmaker("pinnacle", "Pinnacle", home, away, twoWay, homePrice, awayPrice, point),
+      bookmaker("bet365", "Bet365", home, away, twoWay, homePrice - 0.02, awayPrice + 0.02, point),
+      bookmaker("unibet", "Unibet", home, away, twoWay, homePrice + 0.02, awayPrice - 0.04, point),
     ],
   };
 }
@@ -43,12 +65,12 @@ function bookmaker(
   title: string,
   home: string,
   away: string,
-  basketball: boolean,
+  twoWay: boolean,
   homePrice: number,
   awayPrice: number,
   point: number,
 ) {
-  const h2h = basketball
+  const h2h = twoWay
     ? [
         { name: home, price: homePrice },
         { name: away, price: awayPrice },

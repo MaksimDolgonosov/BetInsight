@@ -8,6 +8,27 @@
       "when": 1793708187243,
       "tag": "0000_easy_wild_pack",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793871671804,
+      "tag": "0001_ai_pick_tracks",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793872081795,
+      "tag": "0002_ai_pick_configured",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793949863400,
+      "tag": "0003_stats_epoch",
+      "breakpoints": true
     }
   ]
 }

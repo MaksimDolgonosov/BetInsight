@@ -1,6 +1,6 @@
-import { OpenRouter } from "@openrouter/sdk";
-import { predictionJsonSchema, predictionSchema, type PredictionResult } from "@/server/integrations/openrouter/schema";
+import { parseJson, sendChat, type ChatResult } from "@/server/integrations/openrouter/chat";
 import { renderPrompt } from "@/server/integrations/openrouter/prompt";
+import { predictionJsonSchema, predictionSchema, type PredictionResult } from "@/server/integrations/openrouter/schema";
 
 export type GeneratePredictionInput = {
   model: string;
@@ -19,9 +19,11 @@ export type GeneratePredictionOutput = {
   raw: string;
   parsed: PredictionResult | null;
   validationError: string | null;
+  sources: string[];
+  webSearch: boolean;
 };
 
-type Send = (input: GeneratePredictionInput) => Promise<{ content: string; model: string; tokensIn: number | null; tokensOut: number | null; costUsd: number | null }>;
+type Send = (input: GeneratePredictionInput) => Promise<ChatResult>;
 
 export async function generatePrediction(
   input: GeneratePredictionInput,
@@ -37,6 +39,7 @@ export async function generatePrediction(
   let lastRaw = "";
   let lastError = "invalid_json";
   let totals = { tokensIn: 0, tokensOut: 0, costUsd: 0, latencyMs: 0, model: input.model };
+  let sources: string[] = [];
   let sawCost = false;
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -51,6 +54,7 @@ export async function generatePrediction(
         model: response.model || input.model,
       };
       if (response.costUsd != null) sawCost = true;
+      sources = response.sources ?? [];
       lastRaw = response.content;
       const parsed = predictionSchema.safeParse(parseJson(response.content));
       if (parsed.success) {
@@ -64,6 +68,8 @@ export async function generatePrediction(
           raw: lastRaw,
           parsed: parsed.data,
           validationError: null,
+          sources,
+          webSearch: input.webSearch,
         };
       }
       lastError = parsed.error.issues.map((issue) => issue.message).join("; ").slice(0, 500);
@@ -84,79 +90,20 @@ export async function generatePrediction(
     raw: lastRaw,
     parsed: null,
     validationError: lastError,
+    sources,
+    webSearch: input.webSearch,
   };
 }
 
-async function sendWithSdk(input: GeneratePredictionInput) {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) throw new Error("missing_openrouter_key");
+async function sendWithSdk(input: GeneratePredictionInput): Promise<ChatResult> {
   const prompt = renderPrompt(input.promptVersion, input.payload);
   if (!prompt) throw new Error("unknown_prompt");
-
-  const client = new OpenRouter({
-    apiKey,
-    appTitle: "BetInsight",
+  return sendChat({
+    model: input.model,
+    prompt,
+    webSearch: input.webSearch,
+    jsonSchema: { name: "prediction", schema: predictionJsonSchema },
   });
-  const result = await client.chat.send({
-    chatRequest: {
-      model: input.model,
-      messages: [{ role: "user", content: prompt }],
-      responseFormat: {
-        type: "json_schema",
-        jsonSchema: {
-          name: "prediction",
-          strict: true,
-          schema: predictionJsonSchema,
-        },
-      },
-      plugins: input.webSearch ? [{ id: "web" }] : undefined,
-    },
-  });
-
-  if (!isChatResult(result)) {
-    throw new Error("unexpected_stream");
-  }
-
-  return {
-    content: messageText(result.choices[0]?.message.content),
-    model: result.model,
-    tokensIn: result.usage?.promptTokens ?? null,
-    tokensOut: result.usage?.completionTokens ?? null,
-    costUsd: result.usage?.cost ?? null,
-  };
-}
-
-type ChatCompletion = {
-  choices: { message: { content?: string | unknown[] | null } }[];
-  model: string;
-  usage?: {
-    promptTokens?: number;
-    completionTokens?: number;
-    cost?: number | null;
-  };
-};
-
-function isChatResult(result: unknown): result is ChatCompletion {
-  return typeof result === "object" && result != null && "choices" in result && Array.isArray(result.choices);
-}
-
-function messageText(content: string | unknown[] | null | undefined): string {
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return "";
-  return content
-    .map((item) => {
-      if (typeof item === "object" && item && "text" in item && typeof item.text === "string") {
-        return item.text;
-      }
-      return "";
-    })
-    .join("");
-}
-
-function parseJson(content: string): unknown {
-  const trimmed = content.trim();
-  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
-  return JSON.parse(fenced?.[1] ?? trimmed);
 }
 
 function emptyOutput(input: GeneratePredictionInput, error: string): GeneratePredictionOutput {
@@ -170,5 +117,7 @@ function emptyOutput(input: GeneratePredictionInput, error: string): GeneratePre
     raw: "",
     parsed: null,
     validationError: error,
+    sources: [],
+    webSearch: input.webSearch,
   };
 }

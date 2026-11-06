@@ -26,8 +26,10 @@ export function budgetSnapshot(input: {
   reserveCredits: number;
   used: number;
   now: Date;
+  apiRemaining?: number | null;
 }): BudgetSnapshot {
-  const remaining = Math.max(0, input.monthlyLimit - input.used);
+  const parts = creditParts(input);
+  const remaining = parts.remaining;
   const daysInMonth = daysInUtcMonth(input.now);
   const daysElapsed = input.now.getUTCDate();
   const daysLeft = Math.max(1, daysInMonth - daysElapsed + 1);
@@ -61,6 +63,62 @@ export function canSpend(
     return { ok: false, reason: "reserve" };
   }
   return { ok: true };
+}
+
+export type CreditParts = {
+  remaining: number;
+  spent: number;
+  free: number;
+  reserve: number;
+  fromApi: boolean;
+};
+
+export function creditParts(input: {
+  monthlyLimit: number;
+  reserveCredits: number;
+  used: number;
+  apiRemaining?: number | null;
+}): CreditParts {
+  const ledgerRemaining = Math.max(0, input.monthlyLimit - input.used);
+  const fromApi = input.apiRemaining != null && Number.isFinite(input.apiRemaining);
+  const remaining = fromApi ? Math.max(0, input.apiRemaining) : ledgerRemaining;
+  const spent = Math.max(0, input.monthlyLimit - remaining);
+  const reserve = Math.min(Math.max(0, input.reserveCredits), remaining);
+  const free = Math.max(0, remaining - reserve);
+  return { remaining, spent, free, reserve, fromApi };
+}
+
+export type CreditBar = {
+  day: string;
+  credits: number;
+  state: "past" | "today" | "future";
+};
+
+export function monthCreditBars(
+  rows: { createdAt: string; cost: number }[],
+  now: Date,
+): CreditBar[] {
+  const year = now.getUTCFullYear();
+  const month = now.getUTCMonth();
+  const today = now.getUTCDate();
+  const totals = Array.from({ length: daysInUtcMonth(now) }, () => 0);
+
+  for (const row of rows) {
+    const date = new Date(row.createdAt);
+    if (Number.isNaN(date.getTime())) continue;
+    if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month) continue;
+    const index = date.getUTCDate() - 1;
+    if (index >= 0 && index < totals.length) totals[index] += row.cost;
+  }
+
+  return totals.map((credits, index) => {
+    const date = index + 1;
+    return {
+      day: String(date).padStart(2, "0"),
+      credits,
+      state: date < today ? "past" : date === today ? "today" : "future",
+    };
+  });
 }
 
 export function creditsByDay(
