@@ -1,5 +1,14 @@
-import { mockOddsPayload } from "@/server/integrations/odds-api/mock";
-import { mapOddsEvents, type OddsEvent } from "@/server/integrations/odds-api/schema";
+import { mockEventsPayload, mockOddsPayload, mockScoresPayload, mockSportsPayload } from "@/server/integrations/odds-api/mock";
+import {
+  mapOddsEvents,
+  mapScores,
+  mapTrackedSports,
+  mapUpcomingEvents,
+  type OddsEvent,
+  type ScoreEvent,
+  type TrackedSport,
+  type UpcomingEvent,
+} from "@/server/integrations/odds-api/schema";
 
 export type OddsFetchResult = {
   ok: boolean;
@@ -16,6 +25,90 @@ export type OddsFetchResult = {
 };
 
 const ODDS_API_URL = "https://api.the-odds-api.com/v4";
+
+export type OddsCallResult<T> = {
+  ok: boolean;
+  mocked: boolean;
+  httpStatus: number;
+  endpoint: string;
+  remaining: number | null;
+  used: number | null;
+  lastCost: number | null;
+  raw: unknown;
+  data: T;
+  error: string | null;
+};
+
+export async function fetchSports(input: {
+  catalogKeys: readonly string[];
+  apiKey?: string;
+  fetchImpl?: typeof fetch;
+}): Promise<OddsCallResult<TrackedSport[]>> {
+  if (oddsApiMode() === "mock") {
+    const raw = mockSportsPayload();
+    const mapped = mapTrackedSports(raw, input.catalogKeys);
+    return callResult("GET /v4/sports", true, 200, 0, raw, mapped.sports, mapped.valid);
+  }
+  return oddsGet({
+    path: "/sports",
+    endpoint: "GET /v4/sports",
+    search: {},
+    apiKey: input.apiKey,
+    fetchImpl: input.fetchImpl,
+    map: (raw) => {
+      const mapped = mapTrackedSports(raw, input.catalogKeys);
+      return { data: mapped.sports, valid: mapped.valid };
+    },
+  });
+}
+
+export async function fetchSportEvents(input: {
+  sportKey: string;
+  apiKey?: string;
+  fetchImpl?: typeof fetch;
+}): Promise<OddsCallResult<UpcomingEvent[]>> {
+  if (oddsApiMode() === "mock") {
+    const raw = mockEventsPayload(input.sportKey);
+    const mapped = mapUpcomingEvents(raw);
+    return callResult(`GET /v4/sports/${input.sportKey}/events`, true, 200, 0, raw, mapped.events, mapped.valid);
+  }
+  return oddsGet({
+    path: `/sports/${input.sportKey}/events`,
+    endpoint: `GET /v4/sports/${input.sportKey}/events`,
+    search: {},
+    apiKey: input.apiKey,
+    fetchImpl: input.fetchImpl,
+    map: (raw) => {
+      const mapped = mapUpcomingEvents(raw);
+      return { data: mapped.events, valid: mapped.valid };
+    },
+  });
+}
+
+export async function fetchSportScores(input: {
+  sportKey: string;
+  daysFrom?: number;
+  apiKey?: string;
+  fetchImpl?: typeof fetch;
+}): Promise<OddsCallResult<ScoreEvent[]>> {
+  const daysFrom = input.daysFrom ?? 3;
+  if (oddsApiMode() === "mock") {
+    const raw = mockScoresPayload(input.sportKey);
+    const mapped = mapScores(raw);
+    return callResult(`GET /v4/sports/${input.sportKey}/scores`, true, 200, 0, raw, mapped.events, mapped.valid);
+  }
+  return oddsGet({
+    path: `/sports/${input.sportKey}/scores`,
+    endpoint: `GET /v4/sports/${input.sportKey}/scores`,
+    search: { daysFrom: String(daysFrom) },
+    apiKey: input.apiKey,
+    fetchImpl: input.fetchImpl,
+    map: (raw) => {
+      const mapped = mapScores(raw);
+      return { data: mapped.events, valid: mapped.valid };
+    },
+  });
+}
 
 export function oddsApiMode(): "live" | "mock" {
   if (process.env.VERCEL_ENV === "preview" || process.env.ODDS_API_MODE === "mock") return "mock";
@@ -64,30 +157,123 @@ export async function fetchLeagueOdds(input: {
     };
   }
 
-  const url = new URL(`${ODDS_API_URL}/sports/${input.sportKey}/odds`);
-  url.searchParams.set("regions", input.region);
-  url.searchParams.set("markets", input.markets.join(","));
-  url.searchParams.set("oddsFormat", "decimal");
-  url.searchParams.set("apiKey", apiKey);
-
-  const started = Date.now();
-  const response = await fetchWithRetry(url, input.fetchImpl ?? fetch);
-  const latencyMs = Date.now() - started;
-  const raw = await readJson(response);
+  const response = await oddsFetch(
+    `/sports/${input.sportKey}/odds`,
+    {
+      regions: input.region,
+      markets: input.markets.join(","),
+      oddsFormat: "decimal",
+    },
+    apiKey,
+    input.fetchImpl ?? fetch,
+  );
+  const latencyMs = response.latencyMs;
+  const raw = response.raw;
   const mapped = mapOddsEvents(raw);
 
+  const httpOk = response.status >= 200 && response.status < 300;
   return {
-    ok: response.ok && mapped.valid,
+    ok: httpOk && mapped.valid,
     mocked: false,
     httpStatus: response.status,
     latencyMs,
-    remaining: headerNumber(response, "x-requests-remaining"),
-    used: headerNumber(response, "x-requests-used"),
-    lastCost: headerNumber(response, "x-requests-last"),
+    remaining: response.remaining,
+    used: response.used,
+    lastCost: response.lastCost,
     raw,
     events: filterMarkets(mapped.events, input.markets),
     valid: mapped.valid,
-    error: response.ok && mapped.valid ? null : "odds_failed",
+    error: httpOk && mapped.valid ? null : "odds_failed",
+  };
+}
+
+async function oddsGet<T>(input: {
+  path: string;
+  endpoint: string;
+  search: Record<string, string>;
+  apiKey?: string;
+  fetchImpl?: typeof fetch;
+  map: (raw: unknown) => { data: T; valid: boolean };
+}): Promise<OddsCallResult<T>> {
+  const apiKey = input.apiKey ?? process.env.ODDS_API_KEY;
+  if (!apiKey) {
+    return {
+      ok: false,
+      mocked: false,
+      httpStatus: 0,
+      endpoint: input.endpoint,
+      remaining: null,
+      used: null,
+      lastCost: null,
+      raw: null,
+      data: input.map(null).data,
+      error: "missing_odds_key",
+    };
+  }
+  const response = await oddsFetch(input.path, input.search, apiKey, input.fetchImpl ?? fetch);
+  const mapped = input.map(response.raw);
+  return {
+    ok: response.status >= 200 && response.status < 300 && mapped.valid,
+    mocked: false,
+    httpStatus: response.status,
+    endpoint: input.endpoint,
+    remaining: response.remaining,
+    used: response.used,
+    lastCost: response.lastCost,
+    raw: response.raw,
+    data: mapped.data,
+    error: response.status >= 200 && response.status < 300 && mapped.valid ? null : "odds_failed",
+  };
+}
+
+function callResult<T>(
+  endpoint: string,
+  mocked: boolean,
+  httpStatus: number,
+  lastCost: number | null,
+  raw: unknown,
+  data: T,
+  valid: boolean,
+): OddsCallResult<T> {
+  return {
+    ok: valid,
+    mocked,
+    httpStatus,
+    endpoint,
+    remaining: null,
+    used: null,
+    lastCost,
+    raw,
+    data,
+    error: valid ? null : "odds_failed",
+  };
+}
+
+async function oddsFetch(
+  path: string,
+  search: Record<string, string>,
+  apiKey: string,
+  fetchImpl: typeof fetch,
+): Promise<{
+  status: number;
+  latencyMs: number;
+  remaining: number | null;
+  used: number | null;
+  lastCost: number | null;
+  raw: unknown;
+}> {
+  const url = new URL(`${ODDS_API_URL}${path}`);
+  for (const [key, value] of Object.entries(search)) url.searchParams.set(key, value);
+  url.searchParams.set("apiKey", apiKey);
+  const started = Date.now();
+  const response = await fetchWithRetry(url, fetchImpl);
+  return {
+    status: response.status,
+    latencyMs: Date.now() - started,
+    remaining: headerNumber(response, "x-requests-remaining"),
+    used: headerNumber(response, "x-requests-used"),
+    lastCost: headerNumber(response, "x-requests-last"),
+    raw: await readJson(response),
   };
 }
 

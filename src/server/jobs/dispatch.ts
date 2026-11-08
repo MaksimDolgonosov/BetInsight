@@ -1,0 +1,27 @@
+import "server-only";
+import { runAiConsensus, runAiPredict, runAiResearch, runAiVote } from "@/server/jobs/ai";
+import { runEvaluateModel, runFetchOdds, runFetchScores, runPlanDay, runSyncEvents, runSyncSports } from "@/server/jobs/data";
+import type { JobOutcome } from "@/server/jobs/runner";
+
+const DATA_JOBS = {
+  "sync-sports": runSyncSports,
+  "sync-events": runSyncEvents,
+  "plan-day": runPlanDay,
+  "fetch-odds": runFetchOdds,
+  "evaluate-model": runEvaluateModel,
+  "ai-predict": runAiPredict,
+  "ai-research": runAiResearch,
+  "ai-vote": runAiVote,
+  "ai-consensus": runAiConsensus,
+  "fetch-scores": runFetchScores,
+} as const;
+
+export type DataJobName = keyof typeof DATA_JOBS;
+
+export function isDataJob(job: string): job is DataJobName {
+  return Object.hasOwn(DATA_JOBS, job);
+}
+
+export function runDataJob(job: DataJobName, payload: unknown, now = new Date()): Promise<JobOutcome> {
+  return DATA_JOBS[job](payload, now);
+}

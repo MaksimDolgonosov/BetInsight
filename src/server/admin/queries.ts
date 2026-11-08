@@ -7,6 +7,7 @@ import { oddsApiMode } from "@/server/integrations/odds-api/client";
 import { qstashConfigured } from "@/server/integrations/qstash/client";
 import { redisConfigured } from "@/server/integrations/redis/client";
 import { listActiveTennisLeagues } from "@/server/integrations/odds-api/tennis";
+import { listSavedPredictions } from "@/server/jobs/ai-store";
 
 export async function loadOverview() {
   const now = new Date();
@@ -141,12 +142,16 @@ export async function loadTracks() {
   );
   const votes = (await store.listVotes(200)).filter((row) => inStatsEpoch(row.createdAt, epoch.startedAt));
   const consensus = (await store.listConsensus(40)).filter((row) => inStatsEpoch(row.createdAt, epoch.startedAt));
+  const predictions = process.env.DATABASE_URL
+    ? (await listSavedPredictions(50)).filter((row) => inStatsEpoch(row.publishedAt, epoch.startedAt))
+    : [];
   return {
     mode: store.mode,
     settings,
     evaluations,
     votes,
     consensus,
+    predictions,
     aiPickSpend: await store.aiSpendSince(startOfUtcMonth(now), ["research", "vote"]),
   };
 }

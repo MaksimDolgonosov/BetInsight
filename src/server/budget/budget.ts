@@ -80,8 +80,9 @@ export function creditParts(input: {
   apiRemaining?: number | null;
 }): CreditParts {
   const ledgerRemaining = Math.max(0, input.monthlyLimit - input.used);
-  const fromApi = input.apiRemaining != null && Number.isFinite(input.apiRemaining);
-  const remaining = fromApi ? Math.max(0, input.apiRemaining) : ledgerRemaining;
+  const apiRemaining = input.apiRemaining;
+  const fromApi = apiRemaining != null && Number.isFinite(apiRemaining);
+  const remaining = fromApi ? Math.max(0, apiRemaining) : ledgerRemaining;
   const spent = Math.max(0, input.monthlyLimit - remaining);
   const reserve = Math.min(Math.max(0, input.reserveCredits), remaining);
   const free = Math.max(0, remaining - reserve);

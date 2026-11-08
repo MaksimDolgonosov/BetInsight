@@ -29,6 +29,20 @@
       "when": 1793949863400,
       "tag": "0003_stats_epoch",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794145931035,
+      "tag": "0004_data_jobs",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794153618022,
+      "tag": "0005_prediction_tracks",
+      "breakpoints": true
     }
   ]
 }

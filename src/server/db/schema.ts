@@ -11,6 +11,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import type { SportThresholds } from "@/server/domain/settings";
+export { apiPayloads, oddsSnapshots } from "./data-tables";
 
 export const sports = pgTable("sports", {
   key: text("key").primaryKey(),
@@ -65,28 +66,34 @@ export const events = pgTable("events", {
   missingFromScores: boolean("missing_from_scores").notNull().default(false),
 });
 
-export const predictions = pgTable("predictions", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  eventId: text("event_id").notNull(),
-  market: text("market").notNull(),
-  selection: text("selection").notNull(),
-  point: doublePrecision("point"),
-  price: doublePrecision("price").notNull(),
-  bookmaker: text("bookmaker").notNull(),
-  modelProb: doublePrecision("model_prob"),
-  aiProb: doublePrecision("ai_prob"),
-  ev: doublePrecision("ev"),
-  confidence: text("confidence"),
-  reasoningRu: text("reasoning_ru"),
-  reasoningEn: text("reasoning_en"),
-  llmModel: text("llm_model"),
-  promptVersion: text("prompt_version"),
-  status: text("status").notNull(),
-  profitUnits: doublePrecision("profit_units"),
-  publishedAt: timestamp("published_at", { withTimezone: true }),
-  settledAt: timestamp("settled_at", { withTimezone: true }),
-  hash: text("hash").notNull(),
-});
+export const predictions = pgTable(
+  "predictions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: text("event_id").notNull(),
+    track: text("track").notNull().default("value"),
+    tracksAgree: boolean("tracks_agree").notNull().default(false),
+    market: text("market").notNull(),
+    selection: text("selection").notNull(),
+    point: doublePrecision("point"),
+    price: doublePrecision("price").notNull(),
+    bookmaker: text("bookmaker").notNull(),
+    modelProb: doublePrecision("model_prob"),
+    aiProb: doublePrecision("ai_prob"),
+    ev: doublePrecision("ev"),
+    confidence: text("confidence"),
+    reasoningRu: text("reasoning_ru"),
+    reasoningEn: text("reasoning_en"),
+    llmModel: text("llm_model"),
+    promptVersion: text("prompt_version"),
+    status: text("status").notNull(),
+    profitUnits: doublePrecision("profit_units"),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    settledAt: timestamp("settled_at", { withTimezone: true }),
+    hash: text("hash").notNull(),
+  },
+  (table) => [uniqueIndex("predictions_event_track_idx").on(table.eventId, table.track)],
+);
 
 export const aiRequests = pgTable(
   "ai_requests",

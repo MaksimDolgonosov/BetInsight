@@ -1,3 +1,52 @@
+export function mockSportsPayload() {
+  return [
+    { key: "soccer_spain_la_liga", group: "Soccer", title: "La Liga", description: "", active: true, has_outrights: false },
+    { key: "soccer_germany_bundesliga", group: "Soccer", title: "Bundesliga", description: "", active: true, has_outrights: false },
+    { key: "soccer_uefa_champs_league", group: "Soccer", title: "UEFA Champions League", description: "", active: true, has_outrights: false },
+    { key: "basketball_euroleague", group: "Basketball", title: "Euroleague", description: "", active: true, has_outrights: false },
+    { key: "basketball_nba", group: "Basketball", title: "NBA", description: "", active: true, has_outrights: false },
+    { key: "tennis_atp_paris_masters", group: "Tennis", title: "ATP Paris Masters", description: "", active: true, has_outrights: false },
+    { key: "tennis_atp_outrights", group: "Tennis", title: "ATP Outrights", description: "", active: true, has_outrights: true },
+  ];
+}
+
+export function mockEventsPayload(sportKey: string) {
+  return mockOddsPayload(sportKey).map((event) => ({
+    id: event.id,
+    sport_key: event.sport_key,
+    commence_time: event.commence_time,
+    home_team: event.home_team,
+    away_team: event.away_team,
+  }));
+}
+
+export function mockScoresPayload(sportKey: string) {
+  const [finished, upcoming] = mockOddsPayload(sportKey);
+  return [
+    {
+      id: finished.id,
+      sport_key: sportKey,
+      commence_time: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
+      completed: true,
+      home_team: finished.home_team,
+      away_team: finished.away_team,
+      scores: [
+        { name: finished.home_team, score: "2" },
+        { name: finished.away_team, score: "1" },
+      ],
+    },
+    {
+      id: upcoming.id,
+      sport_key: sportKey,
+      commence_time: upcoming.commence_time,
+      completed: false,
+      home_team: upcoming.home_team,
+      away_team: upcoming.away_team,
+      scores: null,
+    },
+  ];
+}
+
 export function mockOddsPayload(sportKey: string) {
   const profile = mockProfile(sportKey);
   return [

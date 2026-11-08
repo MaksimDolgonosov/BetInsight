@@ -12,6 +12,7 @@ export default async function AdminTracksPage(props: { params: Promise<{ locale:
   const sources = await getTranslations("admin.sources");
   const format = await getFormatter();
   const data = await loadTracks();
+  const candidates = data.evaluations.filter((row) => row.isCandidate);
   const nearMisses = data.evaluations.filter((row) => row.nearMiss);
   const meanEv = nearMisses.length === 0 ? null : nearMisses.reduce((sum, row) => sum + row.ev, 0) / nearMisses.length;
   const decided = data.consensus.filter((row) => row.matchesMarketFavorite != null);
@@ -25,13 +26,14 @@ export default async function AdminTracksPage(props: { params: Promise<{ locale:
         <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
         <p className="mt-2 max-w-3xl text-sm text-muted-foreground">{t("description")}</p>
       </header>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <Stat label={t("track")} value={data.settings.aiPick.enabled ? t("enabled") : t("disabled")} />
         <Stat
           label={t("spend")}
           value={format.number(data.aiPickSpend, { style: "currency", currency: "USD" })}
           hint={t("budget", { value: format.number(data.settings.aiPick.monthlyBudgetUsd, { style: "currency", currency: "USD" }) })}
         />
+        <Stat label={t("candidateCount")} value={format.number(candidates.length)} />
         <Stat label={t("nearMissCount")} value={format.number(nearMisses.length)} hint={meanEv == null ? t("noNearMiss") : t("meanEv", { value: format.number(meanEv, { style: "percent", maximumFractionDigits: 1 }) })} />
         <Stat label={t("favoriteShare")} value={favoriteShare == null ? "—" : format.number(favoriteShare, { style: "percent", maximumFractionDigits: 0 })} />
       </div>
@@ -48,6 +50,80 @@ export default async function AdminTracksPage(props: { params: Promise<{ locale:
           {" · "}
           {t("dailyLimit", { count: data.settings.aiPick.dailyLimit })}
         </p>
+      </Panel>
+      <Panel title={t("candidateTitle")} description={t("candidateDescription")}>
+        {candidates.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t("emptyCandidates")}</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px] text-left text-sm">
+              <thead className="text-xs text-muted-foreground">
+                <tr className="border-b">
+                  <th className="px-2 py-2 font-medium">{t("event")}</th>
+                  <th className="px-2 py-2 font-medium">{t("pick")}</th>
+                  <th className="px-2 py-2 font-medium">EV</th>
+                  <th className="px-2 py-2 font-medium">{t("price")}</th>
+                  <th className="px-2 py-2 font-medium">{t("source")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {candidates.slice(0, 50).map((row) => (
+                  <tr key={row.id} className="border-b last:border-b-0">
+                    <td className="px-2 py-3">{row.home} — {row.away}</td>
+                    <td className="px-2 py-3">
+                      {label(markets, row.market)} · {label(selections, row.outcome)}
+                      {row.point != null ? ` ${row.point}` : ""}
+                    </td>
+                    <td className="px-2 py-3">{format.number(row.ev, { style: "percent", maximumFractionDigits: 1 })}</td>
+                    <td className="px-2 py-3">{format.number(row.bestPrice, { maximumFractionDigits: 2 })} · {row.bestBookmaker}</td>
+                    <td className="px-2 py-3">{sources(row.source)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
+      <Panel title={t("savedTitle")} description={t("savedDescription")}>
+        {data.predictions.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t("emptySaved")}</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px] text-left text-sm">
+              <thead className="text-xs text-muted-foreground">
+                <tr className="border-b">
+                  <th className="px-2 py-2 font-medium">{t("event")}</th>
+                  <th className="px-2 py-2 font-medium">{t("pick")}</th>
+                  <th className="px-2 py-2 font-medium">{t("price")}</th>
+                  <th className="px-2 py-2 font-medium">{t("source")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.predictions.map((row) => {
+                  const reasoning = locale === "ru" ? row.reasoningRu : row.reasoningEn;
+                  return (
+                  <tr key={row.id} className="border-b last:border-b-0">
+                    <td className="px-2 py-3">
+                      {row.home} — {row.away}
+                      {reasoning ? <span className="mt-1 block text-muted-foreground">{reasoning}</span> : null}
+                    </td>
+                    <td className="px-2 py-3">
+                      {label(markets, row.market)} · {label(selections, row.selection)}
+                      {row.point != null ? ` ${row.point}` : ""}
+                    </td>
+                    <td className="px-2 py-3">{format.number(row.price, { maximumFractionDigits: 2 })} · {row.bookmaker}</td>
+                    <td className="px-2 py-3">
+                      {row.track === "ai_pick" ? t("aiPickTrack") : t("valueTrack")}
+                      {row.tracksAgree ? ` · ${t("agree")}` : ""}
+                      {row.confidence ? ` · ${confidence(row.confidence as "low" | "medium" | "high")}` : ""}
+                    </td>
+                  </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Panel>
       <Panel title={t("nearMissTitle")} description={t("nearMissDescription")}>
         {nearMisses.length === 0 ? (
