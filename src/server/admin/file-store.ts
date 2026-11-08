@@ -5,6 +5,7 @@ import { defaultSettings, hydrateSettings, type AdminSettings } from "@/server/d
 import { countEpoch } from "@/server/domain/stats/epoch";
 import { decideSettlement } from "@/server/domain/settlement/profit";
 import { startOfUtcDay } from "@/server/budget/budget";
+import { groupModelSpend } from "@/server/admin/llm-spend";
 import { testRunAllowance } from "@/server/admin/rate-limit";
 import {
   TEST_RUN_ENDPOINT,
@@ -133,6 +134,16 @@ export class FileAdminStore implements AdminStore {
         .filter((row) => row.createdAt >= since.toISOString())
         .filter((row) => !purposes || purposes.includes(row.purpose))
         .reduce((sum, row) => sum + (row.costUsd ?? 0), 0),
+    );
+  }
+
+  aiSpendByModel(since: Date) {
+    return this.read((state) =>
+      groupModelSpend(
+        state.aiRequests
+          .filter((row) => row.createdAt >= since.toISOString())
+          .map((row) => ({ model: row.model, costUsd: row.costUsd })),
+      ),
     );
   }
 

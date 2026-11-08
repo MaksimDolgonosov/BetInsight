@@ -56,9 +56,13 @@ export default async function AdminOverviewPage(props: { params: Promise<{ local
         />
         <LlmSpendCard
           title={t("llmTitle")}
-          model={modelLabel(data.settings.llmModel)}
-          spent={format.number(data.aiPickSpend, { style: "currency", currency: "USD" })}
+          spent={format.number(data.llmSpend, { style: "currency", currency: "USD" })}
+          models={data.modelSpend.map((row) => ({
+            name: row.model,
+            cost: format.number(row.costUsd, { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 4 }),
+          }))}
           ofBudget={t("llmOfBudget", {
+            spent: format.number(data.aiPickSpend, { style: "currency", currency: "USD" }),
             budget: format.number(data.settings.aiPick.monthlyBudgetUsd, { style: "currency", currency: "USD" }),
           })}
           valueNote={t("llmValue", {
@@ -105,11 +109,6 @@ export default async function AdminOverviewPage(props: { params: Promise<{ local
       </Panel>
     </div>
   );
-}
-
-function modelLabel(model: string) {
-  const name = model.split("/").at(-1) ?? model;
-  return name.length > 22 ? `${name.slice(0, 21)}…` : name;
 }
 
 function Integration({ label, ready, yes, no }: { label: string; ready: boolean; yes: string; no: string }) {

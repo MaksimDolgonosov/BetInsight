@@ -74,15 +74,15 @@ export function CreditSpendCard({
 
 export function LlmSpendCard({
   title,
-  model,
   spent,
+  models = [],
   ofBudget,
   valueNote,
   ratio,
 }: {
   title: string;
-  model: string;
   spent: string;
+  models: { name: string; cost: string }[];
   ofBudget: string;
   valueNote: string;
   ratio: number;
@@ -91,12 +91,21 @@ export function LlmSpendCard({
 
   return (
     <section className="rounded-xl border bg-card p-4 md:p-6">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-base font-semibold">{title}</h2>
-        <span className="rounded-md bg-[#A394FF1F] px-2 py-0.5 font-mono text-[11px] font-semibold text-[#A394FF]">{model}</span>
-      </div>
+      <h2 className="text-base font-semibold">{title}</h2>
       <p className="mt-4 text-4xl font-semibold tracking-tight">{spent}</p>
-      <p className="mt-1 text-xs text-muted-foreground">{ofBudget}</p>
+      {models.length > 0 ? (
+        <ul className="mt-4 flex flex-col gap-1.5">
+          {models.map((item) => (
+            <li key={item.name} className="flex items-baseline justify-between gap-3 text-xs">
+              <span className="truncate font-mono text-muted-foreground" title={item.name}>
+                {item.name}
+              </span>
+              <span className="shrink-0 font-mono">{item.cost}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <p className="mt-4 text-xs text-muted-foreground">{ofBudget}</p>
       <div className="mt-4 h-2 overflow-hidden rounded bg-muted">
         <div className="h-full rounded bg-[#A394FF]" style={{ width }} />
       </div>

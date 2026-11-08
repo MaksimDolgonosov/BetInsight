@@ -1,3 +1,4 @@
+import type { ModelSpend } from "@/server/admin/llm-spend";
 import type { AdminSettings } from "@/server/domain/settings";
 import type { SettlementError, SettlementStatus } from "@/server/domain/settlement/profit";
 
@@ -141,6 +142,7 @@ export interface AdminStore {
   listApiUsageSince(since: Date): Promise<ApiUsageRecord[]>;
   listAiRequests(limit: number): Promise<AiRequestRecord[]>;
   aiSpendSince(since: Date, purposes?: AiPurpose[]): Promise<number>;
+  aiSpendByModel(since: Date): Promise<ModelSpend[]>;
   listModelEvaluations(limit: number): Promise<ModelEvaluationRecord[]>;
   listVotes(limit: number): Promise<AiVoteRecord[]>;
   listConsensus(limit: number): Promise<AiConsensusRecord[]>;

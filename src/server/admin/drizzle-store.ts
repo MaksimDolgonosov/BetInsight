@@ -15,6 +15,7 @@ import {
 } from "@/server/domain/settings";
 import { countEpoch } from "@/server/domain/stats/epoch";
 import { decideSettlement } from "@/server/domain/settlement/profit";
+import { groupModelSpend } from "@/server/admin/llm-spend";
 import { testRunAllowance } from "@/server/admin/rate-limit";
 import {
   TEST_RUN_ENDPOINT,
@@ -144,6 +145,16 @@ export class DrizzleAdminStore implements AdminStore {
         if (purposes && !purposes.includes(asPurpose(row.purpose))) return sum;
         return sum + (row.costUsd ?? 0);
       }, 0);
+    });
+  }
+
+  aiSpendByModel(since: Date) {
+    return this.withDb(async (db) => {
+      const rows = await db
+        .select({ model: aiRequests.model, costUsd: aiRequests.costUsd })
+        .from(aiRequests)
+        .where(gte(aiRequests.createdAt, since));
+      return groupModelSpend(rows);
     });
   }
 

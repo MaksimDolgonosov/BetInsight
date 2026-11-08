@@ -4,6 +4,8 @@ import { budgetSnapshot, creditParts, creditsByDay, monthCreditBars, startOfUtcD
 import { getAdminStore } from "@/server/admin/store";
 import { canSpend } from "@/server/budget/budget";
 import { oddsApiMode } from "@/server/integrations/odds-api/client";
+import { qstashConfigured } from "@/server/integrations/qstash/client";
+import { redisConfigured } from "@/server/integrations/redis/client";
 import { listActiveTennisLeagues } from "@/server/integrations/odds-api/tennis";
 
 export async function loadOverview() {
@@ -36,6 +38,7 @@ export async function loadOverview() {
     todaySpent: spentSince(usage, startOfUtcDay(now)),
     llmSpend: await store.aiSpendSince(startOfUtcMonth(now)),
     aiPickSpend: await store.aiSpendSince(startOfUtcMonth(now), ["research", "vote"]),
+    modelSpend: await store.aiSpendByModel(startOfUtcMonth(now)),
     jobs,
     failedJobs: jobs.filter((job) => job.status === "failed").length,
     lastRemaining: apiRemaining,
@@ -76,6 +79,7 @@ export async function loadBudget() {
     aiRequests: await store.listAiRequests(50),
     llmSpend: await store.aiSpendSince(startOfUtcMonth(now)),
     aiPickSpend: await store.aiSpendSince(startOfUtcMonth(now), ["research", "vote"]),
+    modelSpend: await store.aiSpendByModel(startOfUtcMonth(now)),
     lastRemaining: apiRemaining,
   };
 }
@@ -156,8 +160,8 @@ function integrationStatus() {
   return {
     odds: Boolean(process.env.ODDS_API_KEY),
     openrouter: Boolean(process.env.OPENROUTER_API_KEY),
-    qstash: Boolean(process.env.QSTASH_TOKEN),
-    redis: Boolean(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN),
+    qstash: qstashConfigured(),
+    redis: redisConfigured(),
     postgres: Boolean(process.env.DATABASE_URL),
   };
 }

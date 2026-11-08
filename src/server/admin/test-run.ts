@@ -11,8 +11,8 @@ import type { OddsEvent } from "@/server/integrations/odds-api/schema";
 import { generatePrediction } from "@/server/integrations/openrouter/generate";
 import { generateResearch } from "@/server/integrations/openrouter/research";
 import { generateVote } from "@/server/integrations/openrouter/vote";
+import { getRedis } from "@/server/integrations/redis/client";
 import { Ratelimit } from "@upstash/ratelimit";
-import { Redis } from "@upstash/redis";
 
 const VALUE_EVENT_CAP = 3;
 const AI_PICK_EVENT_CAP = 1;
@@ -491,12 +491,10 @@ function predictionPayload(
 }
 
 async function redisAllowance(dailyLimit: number): Promise<"ok" | "interval" | "daily" | "skip"> {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) return "skip";
+  const redis = getRedis();
+  if (!redis) return "skip";
 
   try {
-    const redis = new Redis({ url, token });
     const interval = new Ratelimit({
       redis,
       limiter: Ratelimit.fixedWindow(1, "5 m"),

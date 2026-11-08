@@ -1,20 +1,6 @@
 import "server-only";
-import { Client } from "@upstash/qstash";
-
-const JOBS = new Set([
-  "sync-sports",
-  "sync-events",
-  "plan-day",
-  "fetch-odds",
-  "evaluate-model",
-  "ai-predict",
-  "publish",
-  "fetch-closing-odds",
-  "fetch-scores",
-  "settle",
-  "daily-report",
-  "weekly-report",
-]);
+import { getQstashClient } from "@/server/integrations/qstash/client";
+import { isJobName } from "@/server/integrations/qstash/jobs";
 
 export async function enqueueJob(
   job: string,
@@ -23,13 +9,12 @@ export async function enqueueJob(
   | { ok: true; messageId: string }
   | { ok: false; reason: "unknown_job" | "scheduler_unconfigured" | "publish_failed" }
 > {
-  if (!JOBS.has(job)) return { ok: false, reason: "unknown_job" };
-  const token = process.env.QSTASH_TOKEN;
+  if (!isJobName(job)) return { ok: false, reason: "unknown_job" };
+  const client = getQstashClient();
   const base = appBaseUrl();
-  if (!token || !base) return { ok: false, reason: "scheduler_unconfigured" };
+  if (!client || !base) return { ok: false, reason: "scheduler_unconfigured" };
 
   try {
-    const client = new Client({ token });
     const response = await client.publishJSON({
       url: `${base}/api/jobs/${job}`,
       body: payload ?? {},
