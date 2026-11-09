@@ -1,5 +1,6 @@
 import { CopyHash } from "@/components/public/copy-hash";
 import { KickoffClock } from "@/components/public/kickoff-clock";
+import { hasKickedOff } from "@/components/public/kickoff";
 import { sportMark, teamMark } from "@/components/public/marks";
 import { ReasoningTabs } from "@/components/public/reasoning-tabs";
 import { SiteFooter } from "@/components/public/site-footer";
@@ -21,7 +22,7 @@ export async function EventScreen({ locale, event }: { locale: string; event: Pu
   const implied = pick.price > 1 ? 1 / pick.price : null;
   const consensus = event.focus?.consensusProb ?? pick.modelProb;
   const profit = pick.price - 1;
-  const started = pick.commenceTime ? new Date(pick.commenceTime).getTime() <= Date.now() : false;
+  const started = hasKickedOff(pick.commenceTime);
   const score = pick.homeScore != null && pick.awayScore != null ? `${pick.homeScore}:${pick.awayScore}` : null;
 
   return (

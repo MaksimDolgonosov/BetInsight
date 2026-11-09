@@ -1,10 +1,11 @@
 import { Link } from "@/i18n/navigation";
 import { Activity, Send } from "lucide-react";
 import { getTranslations } from "next-intl/server";
+import { telegramChannelUrl } from "@/server/site";
 
 export async function SiteHeader({ locale, active, path }: { locale: string; active: "home" | "forecasts" | "stats" | "method"; path: string }) {
   const nav = await getTranslations("public.nav");
-  const channel = process.env.TELEGRAM_CHANNEL_URL;
+  const channel = telegramChannelUrl(locale);
 
   return (
     <header className="flex flex-col border-b border-[var(--bi-border)]">

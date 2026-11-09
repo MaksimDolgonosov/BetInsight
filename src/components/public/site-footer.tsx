@@ -1,10 +1,12 @@
 import { Link } from "@/i18n/navigation";
 import { getTranslations } from "next-intl/server";
+import { telegramChannelUrl } from "@/server/site";
 
 export async function SiteFooter({ locale }: { locale: string }) {
   const t = await getTranslations("public.home");
   const nav = await getTranslations("public.nav");
-  const channel = process.env.TELEGRAM_CHANNEL_URL;
+  const channelRu = telegramChannelUrl("ru");
+  const channelEn = telegramChannelUrl("en");
 
   return (
     <footer className="flex flex-col gap-4 border-t border-[var(--bi-border)] px-4 py-7 lg:flex-row lg:items-center lg:justify-between lg:px-16">
@@ -17,8 +19,8 @@ export async function SiteFooter({ locale }: { locale: string }) {
         <Link href="/stats">{nav("stats")}</Link>
         <Link href="/methodology">{nav("method")}</Link>
         <a href={`/${locale}/stats/csv`}>{t("csvExport")}</a>
-        {channel ? <a href={channel}>{t("telegramRu")}</a> : <span>{t("telegramRu")}</span>}
-        {channel ? <a href={channel}>{t("telegramEn")}</a> : <span>{t("telegramEn")}</span>}
+        {channelRu ? <a href={channelRu}>{t("telegramRu")}</a> : <span>{t("telegramRu")}</span>}
+        {channelEn ? <a href={channelEn}>{t("telegramEn")}</a> : <span>{t("telegramEn")}</span>}
       </div>
     </footer>
   );

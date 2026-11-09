@@ -1,4 +1,5 @@
 import { Countdown } from "@/components/public/countdown";
+import { isUpcomingKickoff } from "@/components/public/kickoff";
 import { ForecastFilters } from "@/components/public/forecast-filters";
 import { sportMark } from "@/components/public/marks";
 import { SiteFooter } from "@/components/public/site-footer";
@@ -29,7 +30,7 @@ export async function Forecasts({
   const options = filterChoices({ leagues: [], models: [], promptVersions: [], picks: board.picks });
   const rows = board.picks.filter((pick) => matches(pick, filter));
   const upcoming = rows
-    .filter((pick) => pick.status === "pending" && pick.commenceTime && new Date(pick.commenceTime).getTime() > Date.now())
+    .filter((pick) => isUpcomingKickoff(pick))
     .sort((left, right) => (left.commenceTime ?? "").localeCompare(right.commenceTime ?? ""));
   const archive = rows
     .filter((pick) => pick.status !== "pending")

@@ -1,4 +1,5 @@
 import { Countdown } from "@/components/public/countdown";
+import { isUpcomingKickoff } from "@/components/public/kickoff";
 import { SiteFooter } from "@/components/public/site-footer";
 import { SiteHeader } from "@/components/public/site-header";
 import { Link } from "@/i18n/navigation";
@@ -17,7 +18,7 @@ export async function HomeScreen({ locale, board, range }: { locale: string; boa
   const block = summary.aiPick.count > 0 ? summary.aiPick : summary.combined;
   const bank = sample(windowed(block.bank, range), 48);
   const upcoming = board.picks
-    .filter((pick) => pick.status === "pending" && pick.commenceTime && new Date(pick.commenceTime).getTime() > Date.now())
+    .filter((pick) => isUpcomingKickoff(pick))
     .sort((left, right) => (left.commenceTime ?? "").localeCompare(right.commenceTime ?? ""))
     .slice(0, 5);
   const settled = board.picks
