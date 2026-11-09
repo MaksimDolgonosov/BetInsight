@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Statistics } from "@/components/public/statistics";
+import { languageAlternates } from "@/server/site";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 
 export async function generateMetadata(props: { params: Promise<{ locale: string }> }): Promise<Metadata> {
@@ -8,6 +9,7 @@ export async function generateMetadata(props: { params: Promise<{ locale: string
   return {
     title: t("title"),
     description: t("description"),
+    alternates: languageAlternates(locale, "/stats"),
   };
 }
 

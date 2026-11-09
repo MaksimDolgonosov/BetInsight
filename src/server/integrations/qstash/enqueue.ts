@@ -32,7 +32,9 @@ export async function enqueueJob(
         ? String(response.messageId)
         : "queued";
     return { ok: true, messageId };
-  } catch {
+  } catch (error) {
+    const status = typeof error === "object" && error && "status" in error ? Number(error.status) : 0;
+    if (status === 409) return { ok: true, messageId: "duplicate" };
     return { ok: false, reason: "publish_failed" };
   }
 }

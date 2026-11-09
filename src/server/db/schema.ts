@@ -219,6 +219,31 @@ export const jobRuns = pgTable(
   (table) => [uniqueIndex("job_runs_idempotency_key_idx").on(table.idempotencyKey)],
 );
 
+export const tgSubscribers = pgTable("tg_subscribers", {
+  telegramId: text("telegram_id").primaryKey(),
+  username: text("username"),
+  locale: text("locale").notNull(),
+  active: boolean("active").notNull().default(true),
+  leagues: jsonb("leagues").$type<string[] | null>(),
+  quietHours: jsonb("quiet_hours").$type<{ start: string; end: string } | null>(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const tgMessages = pgTable(
+  "tg_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    predictionId: uuid("prediction_id"),
+    chatId: text("chat_id").notNull(),
+    locale: text("locale").notNull(),
+    messageId: integer("message_id").notNull(),
+    type: text("type").notNull(),
+    dedupe: text("dedupe").notNull(),
+    sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("tg_messages_dedupe_idx").on(table.dedupe)],
+);
+
 export const auditLog = pgTable(
   "audit_log",
   {

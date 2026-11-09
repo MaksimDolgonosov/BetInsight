@@ -13,7 +13,8 @@
     "test:e2e": "playwright test",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "telegram:webhook": "node scripts/register-telegram-webhook.mjs"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "1.11.3",

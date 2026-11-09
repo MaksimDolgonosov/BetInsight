@@ -1,9 +1,10 @@
 import "server-only";
-import { and, count, countDistinct, eq, gte, inArray } from "drizzle-orm";
+import { and, count, countDistinct, desc, eq, gte, inArray } from "drizzle-orm";
 import { unstable_cache } from "next/cache";
 import { getDb } from "@/server/db";
 import { aiConsensus, aiRequests, aiVotes, appSettings, events, modelEvaluations, predictions, sports } from "@/server/db/schema";
 import { oddsSnapshots } from "@/server/db/data-tables";
+import { quoteTable, type QuoteTable } from "@/server/domain/odds/lines";
 import { samePoint } from "@/server/domain/predictions/publish";
 import { gradePrediction } from "@/server/domain/settlement/grade";
 import { inStatsEpoch } from "@/server/domain/stats/epoch";
@@ -314,4 +315,196 @@ function asStatus(value: string): PublicPick["status"] | null {
 function asTrack(value: string): StatsTrack | null {
   if (value === "ai_pick") return value;
   return null;
+}
+
+export type MarketQuote = {
+  market: string;
+  selection: string;
+  point: number | null;
+  consensusProb: number;
+  bestPrice: number;
+  bestBookmaker: string;
+  ev: number;
+  candidate: boolean;
+};
+
+export type PublicEvent = {
+  region: string;
+  snapshotAt: string | null;
+  bookmakers: number;
+  table: QuoteTable;
+  line: MarketQuote[];
+  pick: PublicPick & { reasoningRu: string | null; reasoningEn: string | null; modelProb: number | null };
+  focus: MarketQuote | null;
+  other: { market: string; point: number | null; quotes: MarketQuote[]; skipped: boolean } | null;
+};
+
+const EVENT_ID = /^[A-Za-z0-9_-]{1,128}$/;
+
+export async function loadPublicEvent(eventId: string): Promise<PublicEvent | null> {
+  if (!EVENT_ID.test(eventId) || !process.env.DATABASE_URL) return null;
+  try {
+    return await unstable_cache(() => readEvent(eventId), ["public-event", eventId], {
+      tags: ["public-stats"],
+      revalidate: 3600,
+    })();
+  } catch (error) {
+    console.error("public event unavailable", error instanceof Error ? error.message : "failed");
+    return null;
+  }
+}
+
+async function readEvent(eventId: string): Promise<PublicEvent | null> {
+  const db = getDb();
+  const [settings] = await db
+    .select({ region: appSettings.region, epoch: appSettings.statsEpochStartedAt })
+    .from(appSettings)
+    .limit(1);
+  const [row] = await db
+    .select({
+      id: predictions.id,
+      eventId: predictions.eventId,
+      track: predictions.track,
+      sportKey: events.sportKey,
+      league: sports.title,
+      home: events.home,
+      away: events.away,
+      market: predictions.market,
+      selection: predictions.selection,
+      point: predictions.point,
+      price: predictions.price,
+      bookmaker: predictions.bookmaker,
+      status: predictions.status,
+      profitUnits: predictions.profitUnits,
+      modelProb: predictions.modelProb,
+      aiProb: predictions.aiProb,
+      confidence: predictions.confidence,
+      reasoningRu: predictions.reasoningRu,
+      reasoningEn: predictions.reasoningEn,
+      llmModel: predictions.llmModel,
+      promptVersion: predictions.promptVersion,
+      publishedAt: predictions.publishedAt,
+      settledAt: predictions.settledAt,
+      hash: predictions.hash,
+      eventStatus: events.status,
+      homeScore: events.homeScore,
+      awayScore: events.awayScore,
+      completedAt: events.completedAt,
+      commenceTime: events.commenceTime,
+      ev: predictions.ev,
+    })
+    .from(predictions)
+    .innerJoin(events, eq(predictions.eventId, events.id))
+    .leftJoin(sports, eq(events.sportKey, sports.key))
+    .where(and(eq(predictions.eventId, eventId), eq(predictions.track, "ai_pick")))
+    .orderBy(desc(predictions.publishedAt))
+    .limit(1);
+
+  const status = row ? asStatus(row.status) : null;
+  if (!row || !status || !row.publishedAt || !inStatsEpoch(row.publishedAt, settings?.epoch ?? null)) return null;
+
+  const [snapshots, evaluations, closingRows, searchRows, consensusRows] = await Promise.all([
+    db.select().from(oddsSnapshots).where(eq(oddsSnapshots.eventId, eventId)),
+    db.select().from(modelEvaluations).where(and(eq(modelEvaluations.eventId, eventId), eq(modelEvaluations.source, "job"))),
+    db.select().from(oddsSnapshots).where(and(eq(oddsSnapshots.eventId, eventId), eq(oddsSnapshots.isClosing, true))),
+    db
+      .select({ purpose: aiRequests.purpose })
+      .from(aiRequests)
+      .where(and(eq(aiRequests.eventId, eventId), eq(aiRequests.source, "job"), eq(aiRequests.webSearch, true))),
+    db.select().from(aiConsensus).where(and(eq(aiConsensus.eventId, eventId), eq(aiConsensus.source, "job"))),
+  ]);
+
+  const batch = snapshotBatch(snapshots, row.publishedAt);
+  const focusQuotes = batch.filter((item) => item.market === row.market && samePoint(item.point, row.point));
+  const table = quoteTable(focusQuotes.map((item) => ({ bookmaker: item.bookmaker, selection: item.outcome, price: item.price })));
+  const latest = latestByEvent(evaluations);
+  const quotes = latest.map(asMarketQuote);
+  const line = quotes.filter((item) => item.market === row.market && samePoint(item.point, row.point));
+  const focus = line.find((item) => item.selection === row.selection) ?? null;
+  const other = otherMarket(row.market, quotes);
+  const consensus = consensusFor(consensusRows, eventId, row.id);
+  const closing = latestClosing(closingRows);
+
+  return {
+    region: (settings?.region ?? "eu").toUpperCase(),
+    snapshotAt: batch.length > 0 ? new Date(Math.max(...batch.map((item) => item.fetchedAt.getTime()))).toISOString() : null,
+    bookmakers: new Set(focusQuotes.map((item) => item.bookmaker)).size,
+    table,
+    line,
+    focus,
+    other,
+    pick: {
+      id: row.id,
+      eventId: row.eventId,
+      track: "ai_pick",
+      sportKey: row.sportKey,
+      league: row.league ?? row.sportKey,
+      home: row.home,
+      away: row.away,
+      market: row.market,
+      selection: row.selection,
+      point: row.point,
+      price: row.price,
+      bookmaker: row.bookmaker,
+      status,
+      profitUnits: row.profitUnits,
+      aiProb: row.aiProb,
+      confidence: row.confidence,
+      llmModel: row.llmModel,
+      promptVersion: row.promptVersion,
+      webSearch: searchRows.some((item) => item.purpose === "research"),
+      publishedAt: row.publishedAt.toISOString(),
+      settledAt: row.settledAt?.toISOString() ?? null,
+      hash: row.hash,
+      matchesMarketFavorite: consensus?.matchesMarketFavorite ?? null,
+      unanimous: consensus ? consensus.votesTotal >= 2 && consensus.votesFor === consensus.votesTotal : null,
+      closingPrice: closing.get(quoteKey(row.eventId, row.market, row.selection, row.point)) ?? null,
+      commenceTime: row.commenceTime.toISOString(),
+      ev: row.ev,
+      homeScore: row.homeScore,
+      awayScore: row.awayScore,
+      reasoningRu: row.reasoningRu,
+      reasoningEn: row.reasoningEn,
+      modelProb: row.modelProb,
+    },
+  };
+}
+
+function snapshotBatch(rows: (typeof oddsSnapshots.$inferSelect)[], publishedAt: Date) {
+  const opening = rows.filter((row) => !row.isClosing && row.fetchedAt.getTime() <= publishedAt.getTime());
+  const pool = opening.length > 0 ? opening : rows.filter((row) => !row.isClosing);
+  const source = pool.length > 0 ? pool : rows;
+  if (source.length === 0) return [];
+  const latest = Math.max(...source.map((row) => row.fetchedAt.getTime()));
+  return source.filter((row) => latest - row.fetchedAt.getTime() < 5000);
+}
+
+function asMarketQuote(row: typeof modelEvaluations.$inferSelect): MarketQuote {
+  return {
+    market: row.market,
+    selection: row.outcome,
+    point: row.point,
+    consensusProb: row.consensusProb,
+    bestPrice: row.bestPrice,
+    bestBookmaker: row.bestBookmaker,
+    ev: row.ev,
+    candidate: row.isCandidate,
+  };
+}
+
+function otherMarket(market: string, quotes: MarketQuote[]) {
+  if (market === "h2h") {
+    const totals = quotes.filter((item) => item.market === "totals");
+    const line = [...totals].sort((left, right) => right.ev - left.ev)[0];
+    if (!line) return null;
+    return {
+      market: "totals",
+      point: line.point,
+      quotes: totals.filter((item) => samePoint(item.point, line.point)),
+      skipped: !totals.some((item) => samePoint(item.point, line.point) && item.candidate),
+    };
+  }
+  const h2h = quotes.filter((item) => item.market === "h2h");
+  if (h2h.length === 0) return null;
+  return { market: "h2h", point: null, quotes: h2h, skipped: !h2h.some((item) => item.candidate) };
 }

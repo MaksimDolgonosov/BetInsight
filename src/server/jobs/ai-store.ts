@@ -3,6 +3,7 @@ import { and, desc, eq, gte, lt } from "drizzle-orm";
 import { getDb } from "@/server/db";
 import { aiConsensus, aiRequests, aiVotes, events, modelEvaluations, predictions } from "@/server/db/schema";
 import { samePoint, type PredictionTrack } from "@/server/domain/predictions/publish";
+import { refreshPublicBoard } from "@/server/stats/refresh";
 
 export function mskDayRange(day: string): { start: Date; end: Date } {
   const start = new Date(`${day}T00:00:00+03:00`);
@@ -83,6 +84,7 @@ export async function savePrediction(row: {
       .set({ tracksAgree: true })
       .where(and(eq(predictions.eventId, row.eventId), eq(predictions.track, other)));
   }
+  refreshPublicBoard();
   return "saved";
 }
 

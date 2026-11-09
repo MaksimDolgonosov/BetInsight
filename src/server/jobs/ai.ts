@@ -227,7 +227,10 @@ async function consensusEvent(eventId: string, day: string, now: Date): Promise<
   const context = await eventContext(eventId);
   if (!context) return { status: "skipped", detail: { reason: "event_missing" } };
   const { start, end } = mskDayRange(day);
-  if (await consensusExists(eventId, start)) return { status: "skipped", detail: { reason: "already_saved" } };
+  if (await consensusExists(eventId, start)) {
+    if (await predictionExists(eventId, "ai_pick")) await publishForecast(eventId);
+    return { status: "skipped", detail: { reason: "already_saved" } };
+  }
 
   const stored = await votesForEvent(eventId, start);
   const votes = stored.flatMap(asVote);
@@ -266,6 +269,7 @@ async function consensusEvent(eventId: string, day: string, now: Date): Promise<
           promptVersion: VOTE_PROMPT_VERSION,
           now,
         });
+  if (saved === "saved" || saved === "duplicate" || saved === "already_saved") await publishForecast(eventId);
   await saveConsensus({
     eventId,
     home: context.event.home,
@@ -412,6 +416,11 @@ async function deliverJob(
   }
   if (options?.notBefore) return;
   await run();
+}
+
+async function publishForecast(eventId: string) {
+  const { queuePublish } = await import("@/server/jobs/telegram");
+  await queuePublish({ kind: "forecast", eventId });
 }
 
 function unique(values: string[]): string[] {

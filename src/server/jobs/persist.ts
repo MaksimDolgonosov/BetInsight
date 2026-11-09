@@ -1,6 +1,7 @@
 import "server-only";
 import { and, desc, eq, gte, gt, inArray, sql } from "drizzle-orm";
 import { budgetSnapshot, canSpend, startOfUtcDay, startOfUtcMonth } from "@/server/budget/budget";
+import { alertBudget } from "@/server/integrations/telegram/alerts";
 import { getDb } from "@/server/db";
 import { apiPayloads, oddsSnapshots } from "@/server/db/data-tables";
 import { apiUsage, auditLog, events, modelEvaluations, sports } from "@/server/db/schema";
@@ -320,6 +321,11 @@ export async function budgetAllows(input: {
       entity: input.sportKey,
       payload: { reason: decision.reason, endpoint: input.endpoint, cost: input.cost },
     });
+    try {
+      await alertBudget(decision.reason, input.now);
+    } catch (error) {
+      console.error("budget alert", error instanceof Error ? error.message : "failed");
+    }
   }
   return decision;
 }

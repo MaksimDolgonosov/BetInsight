@@ -4,6 +4,7 @@ import { hasLocale, NextIntlClientProvider } from "next-intl";
 import { getMessages, getTranslations, setRequestLocale } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { routing } from "@/i18n/routing";
+import { languageAlternates, siteOrigin } from "@/server/site";
 import "../globals.css";
 
 const sans = Inter({
@@ -45,14 +46,13 @@ export async function generateMetadata(
   const t = await getTranslations({ locale, namespace: "home" });
 
   return {
-    title: t("title"),
-    description: t("description"),
-    alternates: {
-      languages: {
-        ru: "/ru",
-        en: "/en",
-      },
+    metadataBase: new URL(siteOrigin()),
+    title: {
+      default: t("title"),
+      template: "%s · BetInsight",
     },
+    description: t("description"),
+    alternates: languageAlternates(locale, "/"),
   };
 }
 

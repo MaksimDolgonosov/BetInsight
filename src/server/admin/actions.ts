@@ -7,6 +7,7 @@ import { adminConfigured, getAdminStore } from "@/server/admin/store";
 import { parseSettingsForm, type SettingsError } from "@/server/domain/settings";
 import type { SettlementError, SettlementStatus } from "@/server/domain/settlement/profit";
 import { enqueueJob } from "@/server/integrations/qstash/enqueue";
+import { refreshPublicBoard } from "@/server/stats/refresh";
 import { requireAdmin, signIn, signOut } from "@/server/auth";
 
 export type LoginState = { error: "invalid_credentials" | "not_configured" } | null;
@@ -62,6 +63,7 @@ export async function resetStatisticsAction(): Promise<{ ok: true } | { ok: fals
   if (!session?.user?.email) return { ok: false, error: "unauthorized" };
 
   await getAdminStore().resetStatsEpoch({ actor: session.user.email, now: new Date() });
+  refreshPublicBoard();
   revalidatePath("/ru/admin", "layout");
   revalidatePath("/en/admin", "layout");
   revalidatePath("/ru", "layout");

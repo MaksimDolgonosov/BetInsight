@@ -15140,7 +15140,8 @@
                               "fill": "$text-2",
                               "content": "10:42",
                               "fontFamily": "JetBrains Mono",
-                              "fontSize": 12
+                              "fontSize": 12,
+                              "fontWeight": "normal"
                             }
                           ]
                         },
@@ -15159,7 +15160,8 @@
                               "fill": "$text-2",
                               "content": "2.1с",
                               "fontFamily": "JetBrains Mono",
-                              "fontSize": 12
+                              "fontSize": 12,
+                              "fontWeight": "normal"
                             }
                           ]
                         },
@@ -15315,7 +15317,8 @@
                               "fill": "$text-2",
                               "content": "11:15",
                               "fontFamily": "JetBrains Mono",
-                              "fontSize": 12
+                              "fontSize": 12,
+                              "fontWeight": "normal"
                             }
                           ]
                         },
@@ -15334,7 +15337,8 @@
                               "fill": "$text-2",
                               "content": "—",
                               "fontFamily": "JetBrains Mono",
-                              "fontSize": 12
+                              "fontSize": 12,
+                              "fontWeight": "normal"
                             }
                           ]
                         },
@@ -15465,7 +15469,8 @@
                               "fill": "$text-2",
                               "content": "10:31",
                               "fontFamily": "JetBrains Mono",
-                              "fontSize": 12
+                              "fontSize": 12,
+                              "fontWeight": "normal"
                             }
                           ]
                         },
@@ -15484,7 +15489,8 @@
                               "fill": "$text-2",
                               "content": "7.4с",
                               "fontFamily": "JetBrains Mono",
-                              "fontSize": 12
+                              "fontSize": 12,
+                              "fontWeight": "normal"
                             }
                           ]
                         },
@@ -15615,7 +15621,8 @@
                               "fill": "$text-2",
                               "content": "10:32",
                               "fontFamily": "JetBrains Mono",
-                              "fontSize": 12
+                              "fontSize": 12,
+                              "fontWeight": "normal"
                             }
                           ]
                         },
@@ -15634,7 +15641,8 @@
                               "fill": "$text-2",
                               "content": "3.2с",
                               "fontFamily": "JetBrains Mono",
-                              "fontSize": 12
+                              "fontSize": 12,
+                              "fontWeight": "normal"
                             }
                           ]
                         },
@@ -15765,7 +15773,8 @@
                               "fill": "$text-2",
                               "content": "10:30",
                               "fontFamily": "JetBrains Mono",
-                              "fontSize": 12
+                              "fontSize": 12,
+                              "fontWeight": "normal"
                             }
                           ]
                         },
@@ -15784,7 +15793,8 @@
                               "fill": "$text-2",
                               "content": "0.1с",
                               "fontFamily": "JetBrains Mono",
-                              "fontSize": 12
+                              "fontSize": 12,
+                              "fontWeight": "normal"
                             }
                           ]
                         },
@@ -15915,7 +15925,8 @@
                               "fill": "$text-2",
                               "content": "10:29",
                               "fontFamily": "JetBrains Mono",
-                              "fontSize": 12
+                              "fontSize": 12,
+                              "fontWeight": "normal"
                             }
                           ]
                         },
@@ -15934,7 +15945,8 @@
                               "fill": "$text-2",
                               "content": "0.8с",
                               "fontFamily": "JetBrains Mono",
-                              "fontSize": 12
+                              "fontSize": 12,
+                              "fontWeight": "normal"
                             }
                           ]
                         },
@@ -16065,7 +16077,8 @@
                               "fill": "$text-2",
                               "content": "06:00",
                               "fontFamily": "JetBrains Mono",
-                              "fontSize": 12
+                              "fontSize": 12,
+                              "fontWeight": "normal"
                             }
                           ]
                         },
@@ -16084,7 +16097,8 @@
                               "fill": "$text-2",
                               "content": "1.2с",
                               "fontFamily": "JetBrains Mono",
-                              "fontSize": 12
+                              "fontSize": 12,
+                              "fontWeight": "normal"
                             }
                           ]
                         },
@@ -23655,7 +23669,8 @@
                           "fill": "$text-2",
                           "content": "Коэффициенты 6 букмекеров получены",
                           "fontFamily": "Inter",
-                          "fontSize": 13
+                          "fontSize": 13,
+                          "fontWeight": "normal"
                         }
                       ]
                     },
@@ -23684,7 +23699,8 @@
                           "fill": "$text-2",
                           "content": "Модель нашла кандидата: ТБ 2.5, EV +5.1%",
                           "fontFamily": "Inter",
-                          "fontSize": 13
+                          "fontSize": 13,
+                          "fontWeight": "normal"
                         }
                       ]
                     },
@@ -23743,7 +23759,8 @@
                           "fill": "$text-3",
                           "content": "Фиксация, хеш и пост в Telegram",
                           "fontFamily": "Inter",
-                          "fontSize": 13
+                          "fontSize": 13,
+                          "fontWeight": "normal"
                         }
                       ]
                     }
@@ -24710,6 +24727,53 @@
                   ]
                 }
               ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "LpOOw",
+      "x": 5570,
+      "y": 0,
+      "name": "Иконка — Telegram канал",
+      "clip": true,
+      "width": 400,
+      "layout": "vertical",
+      "gap": 16,
+      "children": [
+        {
+          "type": "text",
+          "id": "qndza",
+          "name": "Подпись",
+          "fill": "$text",
+          "content": "Иконка канала",
+          "fontFamily": "Space Grotesk",
+          "fontSize": 16,
+          "fontWeight": "600"
+        },
+        {
+          "type": "frame",
+          "id": "IlPdP",
+          "name": "Иконка",
+          "clip": true,
+          "width": 400,
+          "height": 400,
+          "fill": "$accent",
+          "cornerRadius": 999,
+          "justifyContent": "center",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "icon",
+              "id": "jOCg8",
+              "name": "activity",
+              "width": 200,
+              "height": 200,
+              "icon": "activity",
+              "library": "lucide",
+              "fill": "$accent-ink"
             }
           ]
         }

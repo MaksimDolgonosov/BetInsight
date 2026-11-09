@@ -1,3 +1,4 @@
+import { SiteFooter } from "@/components/public/site-footer";
 import { SiteHeader } from "@/components/public/site-header";
 import { StatsFilters } from "@/components/public/stats-filters";
 import { Link } from "@/i18n/navigation";
@@ -178,6 +179,7 @@ export async function Statistics({
             </div>
           </section>
         </main>
+        <SiteFooter locale={locale} />
       </div>
     </div>
   );

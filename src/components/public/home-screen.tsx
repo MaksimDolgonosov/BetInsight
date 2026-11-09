@@ -1,4 +1,5 @@
 import { Countdown } from "@/components/public/countdown";
+import { SiteFooter } from "@/components/public/site-footer";
 import { SiteHeader } from "@/components/public/site-header";
 import { Link } from "@/i18n/navigation";
 import { summarize, type PublicPick } from "@/server/domain/stats/metrics";
@@ -9,7 +10,6 @@ import { getFormatter, getTranslations } from "next-intl/server";
 export async function HomeScreen({ locale, board, range }: { locale: string; board: PublicBoard; range: "30" | "90" | "all" }) {
   const t = await getTranslations("public.home");
   const stats = await getTranslations("public.stats");
-  const nav = await getTranslations("public.nav");
   const selections = await getTranslations("public.selections");
   const confidence = await getTranslations("public.confidence");
   const format = await getFormatter();
@@ -26,7 +26,6 @@ export async function HomeScreen({ locale, board, range }: { locale: string; boa
   const recent = settled.slice(0, 5);
   const form = settled.slice(0, 16).reverse();
   const since = board.epochStartedAt ? format.dateTime(new Date(board.epochStartedAt), { day: "numeric", month: "long" }) : null;
-  const channel = process.env.TELEGRAM_CHANNEL_URL;
 
   return (
     <div className="bi-stats min-h-screen">
@@ -102,7 +101,7 @@ export async function HomeScreen({ locale, board, range }: { locale: string; boa
                 <h2 className="font-display text-[26px] font-semibold">{t("upcoming")}</h2>
                 <p className="text-[14px] text-[var(--bi-text-3)]">{t("upcomingHint")}</p>
               </div>
-              <Link href="/stats" className="inline-flex items-center gap-1.5 text-[14px] font-medium">
+              <Link href="/forecasts" className="inline-flex items-center gap-1.5 text-[14px] font-medium">
                 {t("allForecasts")}
                 <ArrowRight className="size-4" />
               </Link>
@@ -117,7 +116,7 @@ export async function HomeScreen({ locale, board, range }: { locale: string; boa
                 <span className="w-[112px]">{t("colConfidence")}</span>
               </div>
               {upcoming.length === 0 ? <p className="px-6 py-5 text-[14px] text-[var(--bi-text-3)]">{t("emptyUpcoming")}</p> : upcoming.map((pick, index) => (
-                <article key={pick.id} className={`flex flex-col gap-3 px-6 py-[18px] lg:flex-row lg:items-center lg:gap-4 ${index === 0 ? "bg-[#c8ff2e08]" : ""}`}>
+                <Link key={pick.id} href={`/events/${pick.eventId}`} className={`flex flex-col gap-3 px-6 py-[18px] lg:flex-row lg:items-center lg:gap-4 ${index === 0 ? "bg-[#c8ff2e08]" : ""}`}>
                   <div className="flex w-full flex-col gap-1 lg:w-[110px]">
                     {pick.commenceTime ? <Countdown at={pick.commenceTime} started={t("started")} /> : null}
                     <span className="text-[12px] text-[var(--bi-text-3)]">{pick.commenceTime ? when(pick.commenceTime, format, t) : "—"}</span>
@@ -139,7 +138,7 @@ export async function HomeScreen({ locale, board, range }: { locale: string; boa
                     <Sparkles className="size-3.5" />
                     {pick.confidence ? label(confidence, pick.confidence) : "—"}
                   </span>
-                </article>
+                </Link>
               ))}
             </div>
           </div>
@@ -157,7 +156,7 @@ export async function HomeScreen({ locale, board, range }: { locale: string; boa
               </div>
             ) : null}
             {recent.length === 0 ? <p className="text-[14px] text-[var(--bi-text-3)]">{t("emptyRecent")}</p> : recent.map((pick) => (
-              <article key={pick.id} className="flex items-center gap-3.5 py-3.5">
+              <Link key={pick.id} href={`/events/${pick.eventId}`} className="flex items-center gap-3.5 py-3.5">
                 <span className={`flex size-8 shrink-0 items-center justify-center rounded-full ${pick.status === "won" ? "bg-[#3ddc971f] text-[var(--bi-win)]" : pick.status === "lost" ? "bg-[#ff5d5d1f] text-[var(--bi-loss)]" : "bg-[var(--bi-surface-2)] text-[var(--bi-text-2)]"}`}>
                   {pick.status === "won" ? <Check className="size-4" /> : pick.status === "lost" ? <X className="size-4" /> : <Undo2 className="size-4" />}
                 </span>
@@ -168,23 +167,12 @@ export async function HomeScreen({ locale, board, range }: { locale: string; boa
                 <span className={`font-stat text-[15px] font-semibold ${pick.status === "won" ? "text-[var(--bi-win)]" : pick.status === "lost" ? "text-[var(--bi-loss)]" : "text-[var(--bi-text-2)]"}`}>
                   {signedNumber(format, pick.profitUnits ?? 0, 2)}
                 </span>
-              </article>
+              </Link>
             ))}
           </aside>
         </section>
 
-        <footer className="flex flex-col gap-4 border-t border-[var(--bi-border)] px-4 py-7 lg:flex-row lg:items-center lg:justify-between lg:px-16">
-          <p className="flex items-center gap-3 text-[13px] text-[var(--bi-text-3)]">
-            <span className="rounded-[6px] bg-[var(--bi-loss)] px-1.5 py-0.5 text-[12px] font-bold text-[var(--bi-ink)]">18+</span>
-            {t("footer")}
-          </p>
-          <div className="flex flex-wrap items-center gap-7 text-[13px] text-[var(--bi-text-2)]">
-            <a href={`/${locale}/stats/csv`}>{t("csvExport")}</a>
-            <span>{nav("method")}</span>
-            {channel ? <a href={channel}>{t("telegramRu")}</a> : <span>{t("telegramRu")}</span>}
-            {channel ? <a href={channel}>{t("telegramEn")}</a> : <span>{t("telegramEn")}</span>}
-          </div>
-        </footer>
+        <SiteFooter locale={locale} />
       </div>
     </div>
   );
