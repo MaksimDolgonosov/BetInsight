@@ -71,7 +71,7 @@ export const predictions = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     eventId: text("event_id").notNull(),
-    track: text("track").notNull().default("value"),
+    track: text("track").notNull().default("ai_pick"),
     tracksAgree: boolean("tracks_agree").notNull().default(false),
     market: text("market").notNull(),
     selection: text("selection").notNull(),

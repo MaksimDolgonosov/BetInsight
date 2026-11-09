@@ -3,10 +3,9 @@ import { z } from "zod";
 import { getAdminStore } from "@/server/admin/store";
 import { startOfUtcDay, startOfUtcMonth } from "@/server/budget/budget";
 import { decideConsensus, marketFavoriteKey, outcomeKey, type ModelVoteInput, type PickRef } from "@/server/domain/predictions/ai-pick";
-import { decideAiPickPublication, decideValuePublication, predictionHash, samePoint, type CandidateQuote } from "@/server/domain/predictions/publish";
+import { decideAiPickPublication, predictionHash, samePoint, type CandidateQuote } from "@/server/domain/predictions/publish";
 import { isSportGroup, type Market } from "@/server/domain/settings";
 import { appBaseUrl, enqueueJob } from "@/server/integrations/qstash/enqueue";
-import { generatePrediction } from "@/server/integrations/openrouter/generate";
 import { VOTE_PROMPT_VERSION } from "@/server/integrations/openrouter/prompt";
 import { generateResearch } from "@/server/integrations/openrouter/research";
 import { generateVote } from "@/server/integrations/openrouter/vote";
@@ -47,12 +46,8 @@ const SELECTIONS = new Set(["home", "draw", "away", "over", "under"]);
 const CONFIDENCE = new Set(["low", "medium", "high"]);
 
 export async function scheduleModelFollowups(input: { rows: ModelRow[]; day: string; now: Date; aiPickEnabled: boolean }) {
-  const valueIds = unique(input.rows.filter((row) => row.isCandidate).map((row) => row.eventId));
-  const pickIds = unique(input.rows.filter((row) => row.aiPickShortlisted).map((row) => row.eventId));
-  for (const eventId of valueIds) {
-    await deliverJob("ai-predict", { eventId, day: input.day }, () => runAiPredict({ eventId, day: input.day }, input.now));
-  }
   if (!input.aiPickEnabled) return;
+  const pickIds = unique(input.rows.filter((row) => row.aiPickShortlisted).map((row) => row.eventId));
   for (const eventId of pickIds) {
     await deliverJob("ai-research", { eventId, day: input.day }, () => runAiResearch({ eventId, day: input.day }, input.now));
   }
@@ -67,7 +62,7 @@ export async function runAiPredict(payload: unknown, now: Date): Promise<JobOutc
     idempotencyKey: `ai-predict:${eventId}:${day}`,
     payload,
     now,
-    work: () => predictValue(eventId, day, now),
+    work: () => predictValue(),
   });
 }
 
@@ -110,56 +105,8 @@ export async function runAiConsensus(payload: unknown, now: Date): Promise<JobOu
   });
 }
 
-async function predictValue(eventId: string, day: string, now: Date): Promise<JobOutcome> {
-  const context = await eventContext(eventId);
-  if (!context) return { status: "skipped", detail: { reason: "event_missing" } };
-  if (await predictionExists(eventId, "value")) return { status: "skipped", detail: { reason: "already_saved" } };
-  const candidates = context.evaluations.filter((row) => row.isCandidate).map(asQuote);
-  if (candidates.length === 0) return { status: "skipped", detail: { reason: "no_candidate" } };
-  if (now.getTime() >= context.event.commenceTime.getTime()) return { status: "skipped", detail: { reason: "too_late" } };
-  if (!process.env.OPENROUTER_API_KEY) return { status: "skipped", detail: { reason: "missing_openrouter_key" } };
-
-  const settings = await getAdminStore().getSettings();
-  const searches = await getAdminStore().webSearchCountSince(startOfUtcDay(now));
-  const output = await generatePrediction({
-    model: settings.llmModel,
-    promptVersion: settings.promptVersion,
-    webSearch: settings.webSearchEnabled && searches < settings.webSearchDailyLimit,
-    payload: modelPayload(context, settings.region),
-  });
-  await getAdminStore().recordAiRequest({
-    eventId,
-    model: output.model,
-    promptVersion: output.promptVersion,
-    tokensIn: output.tokensIn,
-    tokensOut: output.tokensOut,
-    costUsd: output.costUsd,
-    latencyMs: output.latencyMs,
-    rawResponse: { content: output.raw },
-    error: output.validationError,
-    webSearch: output.webSearch,
-    sources: output.sources,
-    purpose: "value_check",
-    source: "job",
-  });
-
-  const decision = decideValuePublication({
-    now,
-    commenceTime: context.event.commenceTime,
-    candidates,
-    parsed: output.parsed,
-  });
-  if (decision.action === "skip") return { status: "done", detail: { reason: decision.reason, costUsd: output.costUsd } };
-
-  const saved = await storePick({
-    event: context.event,
-    track: "value",
-    pick: decision.pick,
-    model: output.model,
-    promptVersion: output.promptVersion,
-    now,
-  });
-  return { status: "done", detail: { reason: saved, costUsd: output.costUsd } };
+async function predictValue(): Promise<JobOutcome> {
+  return { status: "skipped", detail: { reason: "track_removed" } };
 }
 
 async function researchEvent(eventId: string, day: string, now: Date): Promise<JobOutcome> {
@@ -415,29 +362,6 @@ async function eventContext(eventId: string) {
   const quotes = odds.find((item) => item.id === eventId)?.quotes ?? [];
   const evaluations = await latestJobEvaluations(eventId);
   return { event, group: league.group, quotes, evaluations };
-}
-
-function modelPayload(
-  context: { event: { id: string; home: string; away: string; commenceTime: Date }; group: string; quotes: unknown; evaluations: { market: string; outcome: string; point: number | null; consensusProb: number; bestPrice: number; bestBookmaker: string; ev: number; isCandidate: boolean; nearMiss: boolean }[] },
-  region: string,
-) {
-  return {
-    sportGroup: context.group,
-    region,
-    event: eventBrief(context.event),
-    quotes: context.quotes,
-    model: context.evaluations.map((row) => ({
-      market: row.market,
-      selection: row.outcome,
-      point: row.point,
-      consensusProb: row.consensusProb,
-      bestPrice: row.bestPrice,
-      bestBookmaker: row.bestBookmaker,
-      ev: row.ev,
-      candidate: row.isCandidate,
-      nearMiss: row.nearMiss,
-    })),
-  };
 }
 
 function eventBrief(event: { id: string; home: string; away: string; commenceTime: Date }) {

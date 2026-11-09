@@ -143,7 +143,7 @@ export async function loadTracks() {
   const votes = (await store.listVotes(200)).filter((row) => inStatsEpoch(row.createdAt, epoch.startedAt));
   const consensus = (await store.listConsensus(40)).filter((row) => inStatsEpoch(row.createdAt, epoch.startedAt));
   const predictions = process.env.DATABASE_URL
-    ? (await listSavedPredictions(50)).filter((row) => inStatsEpoch(row.publishedAt, epoch.startedAt))
+    ? (await listSavedPredictions(50)).filter((row) => row.track === "ai_pick" && inStatsEpoch(row.publishedAt, epoch.startedAt))
     : [];
   return {
     mode: store.mode,

@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { JsonBlock } from "@/components/admin/json-block";
 import { Button } from "@/components/ui/button";
-import type { TestStreamEvent, TestTrack } from "@/server/admin/test-events";
+import type { TestStreamEvent } from "@/server/admin/test-events";
 import type { Market } from "@/server/domain/settings";
 import { useLocale, useTranslations } from "next-intl";
 
@@ -42,7 +42,6 @@ export function TestRunner({
   const [error, setError] = useState<string | null>(null);
   const [odds, setOdds] = useState<Extract<TestStreamEvent, { type: "odds" }> | null>(null);
   const [model, setModel] = useState<Extract<TestStreamEvent, { type: "model" }> | null>(null);
-  const [tracks, setTracks] = useState<TestTrack[]>(aiPickEnabled ? ["ai_pick"] : []);
   const [predictions, setPredictions] = useState<Extract<TestStreamEvent, { type: "prediction" }>[]>([]);
   const [research, setResearch] = useState<Extract<TestStreamEvent, { type: "research" }>[]>([]);
   const [votes, setVotes] = useState<Extract<TestStreamEvent, { type: "vote" }>[]>([]);
@@ -66,10 +65,6 @@ export function TestRunner({
     setSelected((current) => (current.includes(market) ? current.filter((item) => item !== market) : [...current, market]));
   }
 
-  function toggleTrack(track: TestTrack) {
-    setTracks((current) => (current.includes(track) ? current.filter((item) => item !== track) : [...current, track]));
-  }
-
   async function run() {
     setRunning(true);
     setError(null);
@@ -85,7 +80,7 @@ export function TestRunner({
       const response = await fetch("/api/admin/test-run", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ sportKey, markets: selected, tracks }),
+        body: JSON.stringify({ sportKey, markets: selected, tracks: ["ai_pick"] }),
       });
       if (!response.ok || !response.body) {
         const body = (await response.json().catch(() => null)) as { error?: string } | null;
@@ -158,23 +153,6 @@ export function TestRunner({
               ))}
             </div>
           </div>
-          <div className="flex flex-col gap-1.5 text-sm md:col-span-2">
-            <span className="font-medium">{t("tracks")}</span>
-            <div className="flex h-9 items-center gap-4">
-              {(["value", "ai_pick"] as const).map((track) => (
-                <label key={track} className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    className="size-4"
-                    checked={tracks.includes(track)}
-                    disabled={running || (track === "ai_pick" && !aiPickEnabled)}
-                    onChange={() => toggleTrack(track)}
-                  />
-                  {t(track)}
-                </label>
-              ))}
-            </div>
-          </div>
         </div>
         <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
           <Info label={t("region")} value={region} />
@@ -185,7 +163,7 @@ export function TestRunner({
         {mocked ? <p className="mt-3 text-sm text-muted-foreground">{t("mocked")}</p> : null}
         {blocked ? <p className="mt-3 text-sm text-destructive">{te("reserve")}</p> : null}
         {error ? <p className="mt-3 text-sm text-destructive">{error}</p> : null}
-        <Button className="mt-4" type="button" disabled={running || blocked || !sportKey || selected.length === 0 || tracks.length === 0} onClick={run}>
+        <Button className="mt-4" type="button" disabled={running || blocked || !sportKey || selected.length === 0 || !aiPickEnabled} onClick={run}>
           {running ? t("running") : t("run")}
         </Button>
       </section>

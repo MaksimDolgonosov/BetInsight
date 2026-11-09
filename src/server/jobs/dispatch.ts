@@ -1,6 +1,7 @@
 import "server-only";
 import { runAiConsensus, runAiPredict, runAiResearch, runAiVote } from "@/server/jobs/ai";
 import { runEvaluateModel, runFetchOdds, runFetchScores, runPlanDay, runSyncEvents, runSyncSports } from "@/server/jobs/data";
+import { runSettle } from "@/server/jobs/settle";
 import type { JobOutcome } from "@/server/jobs/runner";
 
 const DATA_JOBS = {
@@ -14,6 +15,7 @@ const DATA_JOBS = {
   "ai-vote": runAiVote,
   "ai-consensus": runAiConsensus,
   "fetch-scores": runFetchScores,
+  settle: runSettle,
 } as const;
 
 export type DataJobName = keyof typeof DATA_JOBS;

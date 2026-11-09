@@ -117,7 +117,34 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+.bi-stats {
+  --bi-bg: #08090b;
+  --bi-surface: #111317;
+  --bi-surface-2: #1a1d23;
+  --bi-border: #23272e;
+  --bi-text: #f2f4f7;
+  --bi-text-2: #9ba3af;
+  --bi-text-3: #646c78;
+  --bi-accent: #c8ff2e;
+  --bi-ink: #0a0b0d;
+  --bi-ai: #a394ff;
+  --bi-win: #3ddc97;
+  --bi-loss: #ff5d5d;
+  --bi-bar: #3a404a;
+  --bi-tab: #2a2f37;
+  background: var(--bi-bg);
+  color: var(--bi-text);
+}
+
 @layer base {
+  .font-display {
+    font-family: var(--font-display), var(--font-manrope), "Space Grotesk", sans-serif;
+  }
+
+  .font-stat {
+    font-family: var(--font-jetbrains), "JetBrains Mono", monospace;
+  }
+
   * {
     @apply border-border outline-ring/50;
   }

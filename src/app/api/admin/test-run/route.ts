@@ -9,7 +9,7 @@ export const maxDuration = 300;
 const bodySchema = z.object({
   sportKey: z.string().regex(/^[a-z0-9_]{3,80}$/),
   markets: z.array(z.enum(MARKETS)).min(1),
-  tracks: z.array(z.enum(["value", "ai_pick"])).min(1),
+  tracks: z.array(z.literal("ai_pick")).min(1),
 });
 
 export async function POST(request: Request) {

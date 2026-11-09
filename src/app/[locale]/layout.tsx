@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist_Mono, Inter } from "next/font/google";
+import { Geist_Mono, Inter, JetBrains_Mono, Manrope, Space_Grotesk } from "next/font/google";
 import { hasLocale, NextIntlClientProvider } from "next-intl";
 import { getMessages, getTranslations, setRequestLocale } from "next-intl/server";
 import { notFound } from "next/navigation";
@@ -14,6 +14,21 @@ const sans = Inter({
 const mono = Geist_Mono({
   subsets: ["latin"],
   variable: "--font-geist-mono",
+});
+
+const display = Space_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-display",
+});
+
+const manrope = Manrope({
+  subsets: ["latin", "cyrillic"],
+  variable: "--font-manrope",
+});
+
+const jetbrains = JetBrains_Mono({
+  subsets: ["latin", "cyrillic"],
+  variable: "--font-jetbrains",
 });
 
 export const dynamicParams = false;
@@ -54,7 +69,7 @@ export default async function RootLayout(props: LayoutProps<"/[locale]">) {
   return (
     <html
       lang={locale}
-      className={`${sans.variable} ${mono.variable} dark h-full antialiased`}
+      className={`${sans.variable} ${mono.variable} ${display.variable} ${manrope.variable} ${jetbrains.variable} dark h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
         <NextIntlClientProvider messages={messages}>

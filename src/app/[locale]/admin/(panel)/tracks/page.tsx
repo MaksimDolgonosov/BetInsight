@@ -113,9 +113,7 @@ export default async function AdminTracksPage(props: { params: Promise<{ locale:
                     </td>
                     <td className="px-2 py-3">{format.number(row.price, { maximumFractionDigits: 2 })} · {row.bookmaker}</td>
                     <td className="px-2 py-3">
-                      {row.track === "ai_pick" ? t("aiPickTrack") : t("valueTrack")}
-                      {row.tracksAgree ? ` · ${t("agree")}` : ""}
-                      {row.confidence ? ` · ${confidence(row.confidence as "low" | "medium" | "high")}` : ""}
+                      {row.confidence ? confidence(row.confidence as "low" | "medium" | "high") : t("aiPickTrack")}
                     </td>
                   </tr>
                   );

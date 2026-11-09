@@ -8,13 +8,11 @@ import type { Market, SportGroup } from "@/server/domain/settings";
 import { fetchLeagueOdds, oddsApiMode } from "@/server/integrations/odds-api/client";
 import { listActiveTennisLeagues } from "@/server/integrations/odds-api/tennis";
 import type { OddsEvent } from "@/server/integrations/odds-api/schema";
-import { generatePrediction } from "@/server/integrations/openrouter/generate";
 import { generateResearch } from "@/server/integrations/openrouter/research";
 import { generateVote } from "@/server/integrations/openrouter/vote";
 import { getRedis } from "@/server/integrations/redis/client";
 import { Ratelimit } from "@upstash/ratelimit";
 
-const VALUE_EVENT_CAP = 3;
 const AI_PICK_EVENT_CAP = 1;
 
 export async function startTestRun(input: {
@@ -169,55 +167,6 @@ export async function startTestRun(input: {
           searchesLeft -= 1;
           return true;
         };
-
-        if (input.tracks.includes("value")) {
-          const candidates = result.events.filter((event) => modelRows.some((row) => row.eventId === event.id && row.candidate));
-          if (candidates.length === 0) send({ type: "note", code: "no_value_candidates" });
-          if (candidates.length > VALUE_EVENT_CAP) send({ type: "note", code: "value_cap" });
-          for (const event of candidates.slice(0, VALUE_EVENT_CAP)) {
-            const webSearch = allowSearch();
-            const evaluations = modelRows.filter((row) => row.eventId === event.id);
-            const output = await generatePrediction({
-              model: settings.llmModel,
-              promptVersion: settings.promptVersion,
-              webSearch,
-              payload: predictionPayload(event, league.group, settings.region, evaluations),
-            });
-            await store.recordAiRequest({
-              eventId: event.id,
-              model: output.model,
-              promptVersion: output.promptVersion,
-              tokensIn: output.tokensIn,
-              tokensOut: output.tokensOut,
-              costUsd: output.costUsd,
-              latencyMs: output.latencyMs,
-              rawResponse: { content: output.raw },
-              error: output.validationError,
-              webSearch: output.webSearch,
-              sources: output.sources,
-              purpose: "value_check",
-              source: "test",
-            });
-            send({
-              type: "prediction",
-              track: "value",
-              eventId: event.id,
-              home: event.home,
-              away: event.away,
-              model: output.model,
-              promptVersion: output.promptVersion,
-              tokensIn: output.tokensIn,
-              tokensOut: output.tokensOut,
-              costUsd: output.costUsd,
-              latencyMs: output.latencyMs,
-              parsed: output.parsed,
-              raw: output.raw,
-              validationError: output.validationError,
-              sources: output.sources,
-              webSearch: output.webSearch,
-            });
-          }
-        }
 
         if (input.tracks.includes("ai_pick")) {
           if (!settings.aiPick.enabled) {
@@ -468,26 +417,6 @@ function usesFreeModel(
     ...(tracks.includes("ai_pick") ? [...settings.aiPick.models, settings.aiPick.researchModel] : []),
   ];
   return models.some((model) => model.endsWith(":free"));
-}
-
-function predictionPayload(
-  event: OddsEvent,
-  group: SportGroup,
-  region: string,
-  evaluations: ReturnType<typeof evaluateQuotes>,
-) {
-  return {
-    sportGroup: group,
-    region,
-    event: {
-      id: event.id,
-      home: event.home,
-      away: event.away,
-      commenceTime: event.commenceTime,
-    },
-    quotes: event.quotes,
-    model: evaluations,
-  };
 }
 
 async function redisAllowance(dailyLimit: number): Promise<"ok" | "interval" | "daily" | "skip"> {

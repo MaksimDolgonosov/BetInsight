@@ -26,6 +26,7 @@ import {
   saveUpcomingEvents,
 } from "@/server/jobs/persist";
 import { runJob, type JobOutcome } from "@/server/jobs/runner";
+import { runSettle } from "@/server/jobs/settle";
 import { isoWeekKey, mskDate, sixHourBucket } from "@/server/jobs/time";
 
 const SCORE_DAYS_FROM = 3;
@@ -275,7 +276,10 @@ async function fetchScoresWork(sportKey: string, day: string, purpose: string, n
   const cached = await findCachedCall({ endpoint, sportKey, day, purpose });
   if (cached) {
     const mapped = mapScores(cached.body);
-    if (mapped.valid) await saveScores(mapped.events, now);
+    if (mapped.valid) {
+      await saveScores(mapped.events, now);
+      await followWithSettle(sportKey, day, purpose, now);
+    }
     return { status: "skipped", detail: { reason: "duplicate_request" } };
   }
   if (!(await hasUnsettledScores(sportKey, now))) {
@@ -311,7 +315,23 @@ async function fetchScoresWork(sportKey: string, day: string, purpose: string, n
     body: result.raw,
   });
   await saveScores(result.data, now);
+  await followWithSettle(sportKey, day, purpose, now);
   return { status: "done", detail: { events: result.data.length, cost } };
+}
+
+async function followWithSettle(sportKey: string, day: string, purpose: string, now: Date) {
+  if (appBaseUrl()?.startsWith("https://")) {
+    const queued = await enqueueJob(
+      "settle",
+      { sportKey, day, purpose },
+      { deduplicationId: `settle-${sportKey}-${day}-${purpose}` },
+    );
+    if (queued.ok || queued.reason !== "scheduler_unconfigured") {
+      if (!queued.ok) throw new Error(queued.reason);
+      return;
+    }
+  }
+  await runSettle({ sportKey, day, purpose }, now);
 }
 
 function eventsForMarkets(events: OddsEvent[], markets: Market[]): OddsEvent[] {
