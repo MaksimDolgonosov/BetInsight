@@ -39,8 +39,8 @@ test("opens forecasts, methodology and a missing event", async ({ page }) => {
 test("opens public statistics in both languages", async ({ page }) => {
   await page.goto("/en/stats");
   await expect(page.getByRole("heading", { name: "Statistics" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "CSV" })).toBeVisible();
-  await page.getByRole("link", { name: "RU" }).click();
+  await expect(page.getByRole("link", { name: "CSV", exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "RU", exact: true }).click();
   await expect(page).toHaveURL(/\/ru\/stats$/);
   await expect(page.getByRole("heading", { name: "Статистика" })).toBeVisible();
 });
