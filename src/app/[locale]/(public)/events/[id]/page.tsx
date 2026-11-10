@@ -32,6 +32,7 @@ export default async function EventPage(props: { params: Promise<{ locale: strin
   ]);
   const name = `${event.pick.home} — ${event.pick.away}`;
   const description = t("meta", { home: event.pick.home, away: event.pick.away, league: event.pick.league });
+  const startDate = event.pick.commenceTime;
   return (
     <>
       <JsonLd
@@ -46,17 +47,19 @@ export default async function EventPage(props: { params: Promise<{ locale: strin
               { name: nav("forecasts"), path: "/forecasts" },
               { name, path: `/events/${id}` },
             ],
-            extra: [
-              sportsEventNode({
-                name,
-                description,
-                url: absoluteUrl(locale, `/events/${id}`),
-                startDate: event.pick.commenceTime,
-                league: event.pick.league,
-                home: event.pick.home,
-                away: event.pick.away,
-              }),
-            ],
+            extra: startDate
+              ? [
+                  sportsEventNode({
+                    name,
+                    description,
+                    url: absoluteUrl(locale, `/events/${id}`),
+                    startDate,
+                    league: event.pick.league,
+                    home: event.pick.home,
+                    away: event.pick.away,
+                  }),
+                ]
+              : [],
           })}
         />
       <EventScreen locale={locale} event={event} />
