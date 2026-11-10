@@ -1,5 +1,5 @@
 {
-  "version": "2.21",
+  "version": "2.22",
   "children": [
     {
       "type": "frame",
@@ -24757,11 +24757,12 @@
           "type": "frame",
           "id": "IlPdP",
           "name": "Иконка",
+          "opacity": 0.96,
           "clip": true,
           "width": 400,
           "height": 400,
           "fill": "$accent",
-          "cornerRadius": 999,
+          "cornerRadius": 1,
           "justifyContent": "center",
           "alignItems": "center",
           "children": [

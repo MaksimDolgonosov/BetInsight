@@ -10,7 +10,8 @@
       "forecasts": "Forecasts",
       "stats": "Statistics",
       "method": "Methodology",
-      "telegram": "Telegram channel"
+      "telegram": "Telegram channel",
+      "telegramShort": "Telegram"
     },
     "home": {
       "metrics": "Current series",
@@ -302,7 +303,8 @@
   },
   "admin": {
     "meta": {
-      "title": "Admin · BetInsight"
+      "title": "Admin · BetInsight",
+      "description": "The admin panel is private."
     },
     "nav": {
       "overview": "Overview",

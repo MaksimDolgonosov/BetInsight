@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Statistics } from "@/components/public/statistics";
-import { languageAlternates } from "@/server/site";
+import { JsonLd } from "@/components/public/json-ld";
+import { pageJsonLd, socialMetadata } from "@/server/seo";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 
 export async function generateMetadata(props: { params: Promise<{ locale: string }> }): Promise<Metadata> {
@@ -8,8 +9,7 @@ export async function generateMetadata(props: { params: Promise<{ locale: string
   const t = await getTranslations({ locale, namespace: "public.stats" });
   return {
     title: t("title"),
-    description: t("description"),
-    alternates: languageAlternates(locale, "/stats"),
+    ...socialMetadata({ locale, path: "/stats", title: t("title"), description: t("description") }),
   };
 }
 
@@ -20,5 +20,27 @@ export default async function StatsPage(props: {
   const { locale } = await props.params;
   setRequestLocale(locale);
   const query = await props.searchParams;
-  return <Statistics locale={locale} query={query} />;
+  const [t, home, nav] = await Promise.all([
+    getTranslations({ locale, namespace: "public.stats" }),
+    getTranslations({ locale, namespace: "home" }),
+    getTranslations({ locale, namespace: "public.nav" }),
+  ]);
+  return (
+    <>
+      <JsonLd
+        data={pageJsonLd({
+          locale,
+          path: "/stats",
+          name: t("title"),
+          description: t("description"),
+          siteDescription: home("description"),
+          crumbs: [
+            { name: nav("home"), path: "/" },
+            { name: nav("stats"), path: "/stats" },
+          ],
+        })}
+      />
+      <Statistics locale={locale} query={query} />
+    </>
+  );
 }

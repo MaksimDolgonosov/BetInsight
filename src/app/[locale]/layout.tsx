@@ -4,7 +4,8 @@ import { hasLocale, NextIntlClientProvider } from "next-intl";
 import { getMessages, getTranslations, setRequestLocale } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { routing } from "@/i18n/routing";
-import { languageAlternates, siteOrigin } from "@/server/site";
+import { socialMetadata } from "@/server/seo";
+import { siteOrigin } from "@/server/site";
 import "../globals.css";
 
 const sans = Inter({
@@ -44,15 +45,16 @@ export async function generateMetadata(
   const { locale } = await props.params;
   setRequestLocale(locale);
   const t = await getTranslations({ locale, namespace: "home" });
+  const title = t("title");
+  const description = t("description");
 
   return {
     metadataBase: new URL(siteOrigin()),
     title: {
-      default: t("title"),
+      default: title,
       template: "%s · BetInsight",
     },
-    description: t("description"),
-    alternates: languageAlternates(locale, "/"),
+    ...socialMetadata({ locale, path: "/", title, description }),
   };
 }
 

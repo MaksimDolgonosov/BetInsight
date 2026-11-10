@@ -28,14 +28,14 @@ export async function SiteHeader({ locale, active, path }: { locale: string; act
           <Link href={path} locale="en" className={localePill(locale === "en")}>EN</Link>
         </div>
         {channel ? (
-          <a href={channel} className="inline-flex items-center gap-2 rounded-full bg-[var(--bi-accent)] px-4 py-2.5 text-[14px] font-semibold text-[var(--bi-ink)]">
+          <a href={channel} aria-label={nav("telegram")} className="inline-flex items-center gap-2 rounded-full bg-[var(--bi-accent)] px-4 py-2.5 text-[14px] font-semibold text-[var(--bi-ink)]">
             <Send className="size-4" />
-            {nav("telegram")}
+            <TelegramLabel full={nav("telegram")} short={nav("telegramShort")} />
           </a>
         ) : (
           <span className="inline-flex items-center gap-2 rounded-full bg-[var(--bi-accent)] px-4 py-2.5 text-[14px] font-semibold text-[var(--bi-ink)]">
             <Send className="size-4" />
-            {nav("telegram")}
+            <TelegramLabel full={nav("telegram")} short={nav("telegramShort")} />
           </span>
         )}
       </div>
@@ -47,6 +47,15 @@ export async function SiteHeader({ locale, active, path }: { locale: string; act
         <Link href="/methodology" className={navClass(active === "method")}>{nav("method")}</Link>
       </nav>
     </header>
+  );
+}
+
+function TelegramLabel({ full, short }: { full: string; short: string }) {
+  return (
+    <>
+      <span className="hidden min-[451px]:inline">{full}</span>
+      <span className="hidden min-[410px]:inline min-[451px]:hidden">{short}</span>
+    </>
   );
 }
 

@@ -10,7 +10,8 @@
       "forecasts": "Прогнозы",
       "stats": "Статистика",
       "method": "Методология",
-      "telegram": "Telegram-канал"
+      "telegram": "Telegram-канал",
+      "telegramShort": "Telegram"
     },
     "home": {
       "metrics": "Текущая серия",
@@ -302,7 +303,8 @@
   },
   "admin": {
     "meta": {
-      "title": "Админка · BetInsight"
+      "title": "Админка · BetInsight",
+      "description": "Закрытая панель управления."
     },
     "nav": {
       "overview": "Обзор",
