@@ -191,6 +191,12 @@ export function escapeHtml(value: string): string {
 
 function selectionLabel(input: PickCopy): string {
   const point = input.point == null ? "" : ` ${formatPoint(input.point)}`;
+  if (input.market === "spreads" && (input.selection === "home" || input.selection === "away")) {
+    const team = input.selection === "home" ? input.home : input.away;
+    const code = input.selection === "home" ? (input.locale === "ru" ? "Ф1" : "AH1") : input.locale === "ru" ? "Ф2" : "AH2";
+    const line = input.point == null ? "" : ` ${signedPoint(input.point)}`;
+    return `${code}${line} ${team}`;
+  }
   if (input.selection === "over") return `${input.locale === "ru" ? "ТБ" : "Over"}${point}`;
   if (input.selection === "under") return `${input.locale === "ru" ? "ТМ" : "Under"}${point}`;
   if (input.selection === "draw") return input.locale === "ru" ? "Ничья" : "Draw";
@@ -237,6 +243,10 @@ function formatPrice(locale: Locale, price: number) {
 
 function formatPoint(point: number) {
   return Number.isInteger(point) ? String(point) : String(point);
+}
+
+function signedPoint(point: number) {
+  return point > 0 ? `+${formatPoint(point)}` : formatPoint(point);
 }
 
 function formatPercent(locale: Locale, value: number | null, signed: boolean) {

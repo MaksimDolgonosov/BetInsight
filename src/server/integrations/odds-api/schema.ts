@@ -49,16 +49,18 @@ export function mapOddsEvents(payload: unknown): { events: OddsEvent[]; valid: b
       const quotes: NormalizedQuote[] = [];
       for (const bookmaker of event.bookmakers) {
         for (const market of bookmaker.markets) {
-          if (market.key !== "h2h" && market.key !== "totals") continue;
+          if (market.key !== "h2h" && market.key !== "totals" && market.key !== "spreads") continue;
           for (const outcome of market.outcomes) {
             const selection = selectionFor(outcome.name, event.home_team, event.away_team, market.key);
             if (!selection) continue;
+            const point = market.key === "h2h" ? null : (outcome.point ?? null);
+            if (market.key === "spreads" && point == null) continue;
             quotes.push({
               bookmakerKey: bookmaker.key,
               bookmaker: bookmaker.title,
               market: market.key,
               selection,
-              point: market.key === "totals" ? (outcome.point ?? null) : null,
+              point,
               price: outcome.price,
             });
           }
@@ -196,10 +198,10 @@ function selectionFor(
   away: string,
   market: Market,
 ): Selection | null {
-  if (market === "h2h") {
+  if (market === "h2h" || market === "spreads") {
     if (name === home) return "home";
     if (name === away) return "away";
-    if (name.toLowerCase() === "draw") return "draw";
+    if (market === "h2h" && name.toLowerCase() === "draw") return "draw";
     return null;
   }
   if (name.toLowerCase() === "over") return "over";

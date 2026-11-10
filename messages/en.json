@@ -68,6 +68,8 @@
       "codeAway": "2",
       "codeOver": "O {point}",
       "codeUnder": "U {point}",
+      "codeSpreadHome": "AH1 {point}",
+      "codeSpreadAway": "AH2 {point}",
       "footer": "Information service. It does not take bets and is not a call to place them.",
       "csvExport": "CSV export",
       "telegramRu": "Telegram RU",
@@ -249,11 +251,14 @@
       "snapshotMissing": "The odds snapshot has not been stored yet.",
       "otherH2h": "Match result according to the market",
       "otherTotal": "Total {point} according to the market",
+      "otherSpread": "Handicap {point} according to the market",
       "aiSkip": "AI: skip",
       "otherBelow": "EV on this market is below the threshold, so the math model did not send it to the AI.",
       "otherShortlisted": "This market was shortlisted, but another selection was published: that is where the models agreed.",
       "totalOver": "Total over {point}",
       "totalUnder": "Total under {point}",
+      "spreadHome": "{team} {point}",
+      "spreadAway": "{team} {point}",
       "homeWin": "{team} to win",
       "awayWin": "{team} to win",
       "draw": "Draw"
@@ -276,7 +281,8 @@
     },
     "markets": {
       "h2h": "Match",
-      "totals": "Total"
+      "totals": "Total",
+      "spreads": "Handicap"
     },
     "selections": {
       "home": "Home",
@@ -391,9 +397,10 @@
       "nba": "NBA",
       "tennis": "Tennis",
       "marketsTitle": "Markets and region",
-      "marketsDescription": "An /odds request costs the number of markets times the number of regions.",
+      "marketsDescription": "An /odds request for moneyline, totals and handicap in the eu region costs 3 credits. If the month's required requests do not fit, the handicap is dropped from the request first.",
       "h2h": "Moneyline",
       "totals": "Totals",
+      "spreads": "Handicap",
       "region": "Region",
       "regionHint": "eu by default, because Pinnacle is quoted there.",
       "thresholdsDescription": "A candidate passes when EV is above the threshold. An outcome with EV from 0 up to the threshold is kept as a near miss and stays out of the public stats. The threshold can be lowered to 0%.",
@@ -403,6 +410,8 @@
       "minBookmakers": "Minimum bookmakers",
       "totalsMin": "Total from",
       "totalsMax": "Total to",
+      "spreadsMin": "Handicap from",
+      "spreadsMax": "Handicap to",
       "modelTitle": "Model and budget",
       "modelDescription": "This value is kept in settings. The Value track does not call it and does not publish a forecast.",
       "llmModel": "Stored model",
@@ -566,7 +575,8 @@
     },
     "markets": {
       "h2h": "Moneyline",
-      "totals": "Totals"
+      "totals": "Totals",
+      "spreads": "Handicap"
     },
     "selections": {
       "home": "Home",
@@ -654,6 +664,7 @@
       "insufficient": "There are not enough credits for this request.",
       "odds_range": "The lower price bound is above the upper bound.",
       "totals_range": "The lower totals bound is above the upper bound.",
+      "spreads_range": "The lower handicap bound is above the upper bound.",
       "leagues": "At least one league must stay enabled.",
       "duplicate": "A league key is duplicated.",
       "free_model": "A free model cannot be saved.",

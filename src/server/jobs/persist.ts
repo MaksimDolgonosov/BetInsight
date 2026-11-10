@@ -6,7 +6,7 @@ import { getDb } from "@/server/db";
 import { apiPayloads, oddsSnapshots } from "@/server/db/data-tables";
 import { apiUsage, auditLog, events, modelEvaluations, sports } from "@/server/db/schema";
 import type { NormalizedQuote, Selection } from "@/server/domain/odds/evaluate";
-import type { Market } from "@/server/domain/settings";
+import { MARKETS, type Market } from "@/server/domain/settings";
 import type { ModelRow } from "@/server/jobs/evaluate";
 import type { OddsEvent } from "@/server/integrations/odds-api/schema";
 import type { ScoreEvent, TrackedSport, UpcomingEvent } from "@/server/integrations/odds-api/schema";
@@ -77,7 +77,7 @@ export async function saveUpcomingEvents(rows: UpcomingEvent[]) {
     });
 }
 
-export async function saveOdds(rows: OddsEvent[], fetchedAt: Date) {
+export async function saveOdds(rows: OddsEvent[], fetchedAt: Date, options?: { closing?: boolean }) {
   await saveUpcomingEvents(rows);
   const quotes = rows.flatMap((event) =>
     event.quotes.map((quote) => ({
@@ -88,7 +88,7 @@ export async function saveOdds(rows: OddsEvent[], fetchedAt: Date) {
       outcome: quote.selection,
       point: quote.point,
       price: quote.price,
-      isClosing: false,
+      isClosing: options?.closing ?? false,
     })),
   );
   if (quotes.length === 0) return;
@@ -126,7 +126,7 @@ export async function saveScores(rows: ScoreEvent[], now: Date) {
   }
 }
 
-const MARKETS = new Set<Market>(["h2h", "totals"]);
+const MARKET_SET = new Set<Market>(MARKETS);
 const SELECTIONS = new Set<Selection>(["home", "draw", "away", "over", "under"]);
 
 export async function loadLatestOdds(sportKey: string): Promise<{ id: string; home: string; away: string; quotes: NormalizedQuote[] }[]> {
@@ -149,7 +149,7 @@ export async function loadLatestOdds(sportKey: string): Promise<{ id: string; ho
     if (fetchedAt == null) return [];
     const quotes = snaps.flatMap((snap): NormalizedQuote[] => {
       if (snap.eventId !== event.id || snap.fetchedAt.getTime() !== fetchedAt) return [];
-      if (!MARKETS.has(snap.market as Market) || !SELECTIONS.has(snap.outcome as Selection)) return [];
+      if (!MARKET_SET.has(snap.market as Market) || !SELECTIONS.has(snap.outcome as Selection)) return [];
       return [{
         bookmakerKey: snap.bookmaker.toLowerCase(),
         bookmaker: snap.bookmaker,
@@ -287,6 +287,20 @@ export async function rememberCall(input: {
     used: input.used,
     source: "job",
   });
+}
+
+export async function listMonthUsage(now: Date) {
+  return getDb()
+    .select({
+      cost: apiUsage.cost,
+      remaining: apiUsage.remaining,
+      createdAt: apiUsage.createdAt,
+      endpoint: apiUsage.endpoint,
+      params: apiUsage.params,
+    })
+    .from(apiUsage)
+    .where(gte(apiUsage.createdAt, startOfUtcMonth(now)))
+    .orderBy(desc(apiUsage.createdAt));
 }
 
 export async function budgetAllows(input: {

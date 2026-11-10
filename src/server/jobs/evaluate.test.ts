@@ -53,6 +53,9 @@ const thresholds = {
   minBookmakers: 3,
   totalsPointMin: 0.5,
   totalsPointMax: 5.5,
+  spreadsPointMin: -2.5,
+  spreadsPointMax: 2.5,
+  spreadsExcludedAbs: [],
 };
 
 function quote(

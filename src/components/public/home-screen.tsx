@@ -447,6 +447,8 @@ function when(
 }
 
 function pickCode(pick: PublicPick, t: Awaited<ReturnType<typeof getTranslations>>) {
+  if (pick.market === "spreads")
+    return t(pick.selection === "away" ? "codeSpreadAway" : "codeSpreadHome", { point: signedPoint(pick.point) });
   if (pick.market === "totals")
     return t(pick.selection === "over" ? "codeOver" : "codeUnder", { point: pick.point ?? "" });
   if (pick.selection === "home") return t("codeHome");
@@ -498,6 +500,11 @@ function signedNumber(format: Awaited<ReturnType<typeof getFormatter>>, value: n
     minimumFractionDigits: digits,
     signDisplay: "exceptZero",
   });
+}
+
+function signedPoint(point: number | null) {
+  if (point == null || !Number.isFinite(point)) return "";
+  return point > 0 ? `+${point}` : String(point);
 }
 
 function points(format: Awaited<ReturnType<typeof getFormatter>>, value: number) {

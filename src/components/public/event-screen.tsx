@@ -161,13 +161,13 @@ export async function EventScreen({ locale, event }: { locale: string; event: Pu
               {event.other ? (
                 <article className="flex flex-col gap-3 rounded-[24px] border border-[var(--bi-border)] bg-[var(--bi-surface)] p-6">
                   <div className="flex items-center justify-between gap-3">
-                    <h2 className="text-[14px] font-semibold">{event.other.market === "h2h" ? t("otherH2h") : t("otherTotal", { point: event.other.point ?? "" })}</h2>
+                    <h2 className="text-[14px] font-semibold">{otherTitle(event.other, t)}</h2>
                     <span className="rounded-full bg-[var(--bi-surface-2)] px-2 py-1 font-stat text-[12px] text-[var(--bi-text-2)]">{t("aiSkip")}</span>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {event.other.quotes.map((quote) => (
                       <span key={`${quote.selection}-${quote.point ?? ""}`} className="rounded-full bg-[var(--bi-bg)] px-2.5 py-1 font-stat text-[12px]">
-                        {quote.market === "totals" ? home(quote.selection === "over" ? "codeOver" : "codeUnder", { point: quote.point ?? "" }) : home(quote.selection === "home" ? "codeHome" : quote.selection === "away" ? "codeAway" : "codeDraw")} {percent(format, quote.consensusProb)}
+                        {outcomeCode(quote, home)} {percent(format, quote.consensusProb)}
                       </span>
                     ))}
                   </div>
@@ -228,6 +228,7 @@ function quoteFor(quotes: MarketQuote[], selection: string) {
 }
 
 function pickTitle(pick: PublicEvent["pick"], t: Awaited<ReturnType<typeof getTranslations>>) {
+  if (pick.market === "spreads") return t(pick.selection === "away" ? "spreadAway" : "spreadHome", { team: pick.selection === "away" ? pick.away : pick.home, point: signedPoint(pick.point) });
   if (pick.market === "totals") return t(pick.selection === "over" ? "totalOver" : "totalUnder", { point: pick.point ?? "" });
   if (pick.selection === "home") return t("homeWin", { team: pick.home });
   if (pick.selection === "away") return t("awayWin", { team: pick.away });
@@ -241,6 +242,23 @@ function when(iso: string, format: Awaited<ReturnType<typeof getFormatter>>, t: 
   tomorrow.setDate(now.getDate() + 1);
   const day = date.toDateString() === now.toDateString() ? t("today") : date.toDateString() === tomorrow.toDateString() ? t("tomorrow") : format.dateTime(date, { day: "numeric", month: "short" });
   return `${day}, ${format.dateTime(date, { hour: "2-digit", minute: "2-digit" })}`;
+}
+
+function otherTitle(other: NonNullable<PublicEvent["other"]>, t: Awaited<ReturnType<typeof getTranslations>>) {
+  if (other.market === "totals") return t("otherTotal", { point: other.point ?? "" });
+  if (other.market === "spreads") return t("otherSpread", { point: signedPoint(other.point) });
+  return t("otherH2h");
+}
+
+function outcomeCode(quote: MarketQuote, t: Awaited<ReturnType<typeof getTranslations>>) {
+  if (quote.market === "totals") return t(quote.selection === "over" ? "codeOver" : "codeUnder", { point: quote.point ?? "" });
+  if (quote.market === "spreads") return t(quote.selection === "away" ? "codeSpreadAway" : "codeSpreadHome", { point: signedPoint(quote.point) });
+  return t(quote.selection === "home" ? "codeHome" : quote.selection === "away" ? "codeAway" : "codeDraw");
+}
+
+function signedPoint(point: number | null) {
+  if (point == null || !Number.isFinite(point)) return "";
+  return point > 0 ? `+${point}` : String(point);
 }
 
 function label(messages: Awaited<ReturnType<typeof getTranslations>>, key: string) {

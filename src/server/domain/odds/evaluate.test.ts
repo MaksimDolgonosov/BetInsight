@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { SportThresholds } from "@/server/domain/settings";
 import { consensusProbability, evaluateQuotes, expectedValue, median, removeMargin } from "./evaluate";
 
 describe("odds model", () => {
@@ -42,6 +43,9 @@ describe("odds model", () => {
       minBookmakers: 3,
       totalsPointMin: 0.5,
       totalsPointMax: 5.5,
+      spreadsPointMin: -2.5,
+      spreadsPointMax: 2.5,
+      spreadsExcludedAbs: [],
     });
     const home = rows.find((row) => row.selection === "home");
     expect(home).toBeDefined();
@@ -68,6 +72,9 @@ describe("odds model", () => {
         minBookmakers: 3,
         totalsPointMin: 0.5,
         totalsPointMax: 5.5,
+        spreadsPointMin: -2.5,
+        spreadsPointMax: 2.5,
+        spreadsExcludedAbs: [],
       },
     );
 
@@ -92,6 +99,9 @@ describe("odds model", () => {
         minBookmakers: 3,
         totalsPointMin: 140,
         totalsPointMax: 190,
+        spreadsPointMin: -20.5,
+        spreadsPointMax: 20.5,
+        spreadsExcludedAbs: [],
       },
     );
 
@@ -116,20 +126,75 @@ describe("odds model", () => {
         minBookmakers: 3,
         totalsPointMin: 140,
         totalsPointMax: 190,
+        spreadsPointMin: -20.5,
+        spreadsPointMax: 20.5,
+        spreadsExcludedAbs: [],
       },
     );
 
     expect(rows.map((row) => row.selection).sort()).toEqual(["away", "home"]);
     expect(rows.find((row) => row.selection === "home")!.consensusProb).toBeGreaterThan(0.5);
   });
+
+  it("prices a handicap only from bookmakers on the same line", () => {
+    const rows = evaluateQuotes(
+      [
+        ...pair("pinnacle", "Pinnacle", -1.5, 2.2, 1.7),
+        ...pair("bet365", "Bet365", -1.5, 2.15, 1.72),
+        ...pair("unibet", "Unibet", -1.5, 2.1, 1.74),
+        ...pair("pinnacle", "Pinnacle", -2.5, 3.4, 1.3),
+      ],
+      limits(),
+    );
+    const home = rows.find((row) => row.selection === "home" && row.point === -1.5);
+    const away = rows.find((row) => row.selection === "away" && row.point === 1.5);
+    expect(home?.bookmakerCount).toBe(3);
+    expect(away?.point).toBe(1.5);
+    expect(home?.consensusProb).toBeLessThan(0.5);
+    expect(rows.some((row) => row.point === -2.5 && row.candidate)).toBe(false);
+    expect(rows.some((row) => row.point === -2.5 && row.bookmakerCount >= 3)).toBe(false);
+  });
+
+  it("drops a football handicap outside -2.5 to +2.5 and a tennis set handicap", () => {
+    const wide = evaluateQuotes(pair("pinnacle", "Pinnacle", -3.5, 1.9, 1.9).concat(pair("bet365", "Bet365", -3.5, 1.9, 1.9), pair("unibet", "Unibet", -3.5, 1.9, 1.9)), limits());
+    expect(wide.every((row) => row.candidate === false && row.nearMiss === false)).toBe(true);
+
+    const sets = evaluateQuotes(
+      pair("pinnacle", "Pinnacle", -1.5, 1.8, 2).concat(pair("bet365", "Bet365", -1.5, 1.8, 2), pair("unibet", "Unibet", -1.5, 1.8, 2)),
+      limits({ spreadsPointMin: -8.5, spreadsPointMax: 8.5, spreadsExcludedAbs: [1.5], oddsMin: 1.4 }),
+    );
+    expect(sets.every((row) => row.candidate === false && row.nearMiss === false)).toBe(true);
+  });
 });
+
+function limits(overrides: Partial<SportThresholds> = {}): SportThresholds {
+  return {
+    evThreshold: 0.02,
+    oddsMin: 1.5,
+    oddsMax: 4,
+    minBookmakers: 3,
+    totalsPointMin: 0.5,
+    totalsPointMax: 5.5,
+    spreadsPointMin: -2.5,
+    spreadsPointMax: 2.5,
+    spreadsExcludedAbs: [],
+    ...overrides,
+  };
+}
+
+function pair(bookmakerKey: string, bookmaker: string, homePoint: number, homePrice: number, awayPrice: number) {
+  return [
+    quote(bookmakerKey, bookmaker, "home", homePrice, "spreads", homePoint),
+    quote(bookmakerKey, bookmaker, "away", awayPrice, "spreads", -homePoint),
+  ];
+}
 
 function quote(
   bookmakerKey: string,
   bookmaker: string,
   selection: "home" | "draw" | "away" | "over" | "under",
   price: number,
-  market: "h2h" | "totals" = "h2h",
+  market: "h2h" | "totals" | "spreads" = "h2h",
   point: number | null = null,
 ) {
   return { bookmakerKey, bookmaker, market, selection, point, price };

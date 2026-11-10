@@ -37,6 +37,7 @@ export function gradePrediction(input: Omit<PendingSettlement, "id">): GradeActi
   if (sport === "other") return { action: "wait", reason: "unsupported" };
   if (input.market === "h2h") return gradeHeadToHead(sport, input.selection, input.price, input.homeScore, input.awayScore);
   if (input.market === "totals") return gradeTotal(sport, input.selection, input.point, input.price, input.homeScore, input.awayScore);
+  if (input.market === "spreads") return gradeSpread(sport, input.selection, input.point, input.price, input.homeScore, input.awayScore);
   return { action: "wait", reason: "unsupported" };
 }
 
@@ -84,6 +85,49 @@ function gradeTotal(
   const over = total > point;
   const won = selection === "over" ? over : !over;
   return settled(won ? "won" : "lost", price);
+}
+
+function gradeSpread(
+  sport: Exclude<ScoreSport, "other">,
+  selection: string,
+  point: number | null,
+  price: number,
+  home: number,
+  away: number,
+): GradeAction {
+  if (selection !== "home" && selection !== "away") return { action: "wait", reason: "unsupported" };
+  if (point == null || !Number.isFinite(point)) return { action: "wait", reason: "unsupported" };
+  if (sport === "basketball" && !basketballScoreReady(home, away)) return { action: "wait", reason: "incomplete" };
+  if (sport === "tennis" && tennisScoreShape(home, away) !== "games") return { action: "wait", reason: "incomplete" };
+
+  const margin = selection === "home" ? home - away : away - home;
+  if (!isQuarterLine(point)) return settled(lineResult(margin, point), price);
+
+  const units = halfUnits(lineResult(margin, point - 0.25), price) + halfUnits(lineResult(margin, point + 0.25), price);
+  const status = units > 1e-9 ? "won" : units < -1e-9 ? "lost" : "void";
+  return { action: "settle", status, profitUnits: roundUnits(units) };
+}
+
+function lineResult(margin: number, point: number): SettlementStatus {
+  const adjusted = margin + point;
+  if (Math.abs(adjusted) < 1e-9) return "void";
+  return adjusted > 0 ? "won" : "lost";
+}
+
+function halfUnits(status: SettlementStatus, price: number): number {
+  if (status === "won") return (price - 1) / 2;
+  if (status === "lost") return -0.5;
+  return 0;
+}
+
+function isQuarterLine(point: number): boolean {
+  const scaled = point * 4;
+  const nearest = Math.round(scaled);
+  return Math.abs(scaled - nearest) < 1e-6 && Math.abs(nearest % 2) === 1;
+}
+
+function roundUnits(value: number): number {
+  return Math.round(value * 10000) / 10000;
 }
 
 function basketballScoreReady(home: number, away: number): boolean {

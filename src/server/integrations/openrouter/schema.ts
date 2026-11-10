@@ -1,8 +1,11 @@
 import { z } from "zod";
+import { MARKETS } from "@/server/domain/settings";
+
+const MARKET_ENUM = [...MARKETS] as [string, ...string[]];
 
 export const predictionSchema = z.object({
   pick: z.object({
-    market: z.enum(["h2h", "totals"]),
+    market: z.enum(MARKETS),
     selection: z.enum(["home", "draw", "away", "over", "under"]),
     point: z.number().nullable(),
   }),
@@ -21,7 +24,7 @@ export const voteSchema = z.object({
   probabilities: z
     .array(
       z.object({
-        market: z.enum(["h2h", "totals"]),
+        market: z.enum(MARKETS),
         selection: z.enum(["home", "draw", "away", "over", "under"]),
         point: z.number().nullable(),
         p: z.number().min(0).max(1),
@@ -30,7 +33,7 @@ export const voteSchema = z.object({
     .min(2)
     .max(3),
   pick: z.object({
-    market: z.enum(["h2h", "totals"]),
+    market: z.enum(MARKETS),
     selection: z.enum(["home", "draw", "away", "over", "under"]),
     point: z.number().nullable(),
   }),
@@ -53,7 +56,7 @@ export const predictionJsonSchema = {
       additionalProperties: false,
       required: ["market", "selection", "point"],
       properties: {
-        market: { type: "string", enum: ["h2h", "totals"] },
+        market: { type: "string", enum: MARKET_ENUM },
         selection: { type: "string", enum: ["home", "draw", "away", "over", "under"] },
         point: { type: ["number", "null"] },
       },
@@ -87,7 +90,7 @@ export const voteJsonSchema = {
         additionalProperties: false,
         required: ["market", "selection", "point", "p"],
         properties: {
-          market: { type: "string", enum: ["h2h", "totals"] },
+          market: { type: "string", enum: MARKET_ENUM },
           selection: { type: "string", enum: ["home", "draw", "away", "over", "under"] },
           point: { type: ["number", "null"] },
           p: { type: "number" },
@@ -99,7 +102,7 @@ export const voteJsonSchema = {
       additionalProperties: false,
       required: ["market", "selection", "point"],
       properties: {
-        market: { type: "string", enum: ["h2h", "totals"] },
+        market: { type: "string", enum: MARKET_ENUM },
         selection: { type: "string", enum: ["home", "draw", "away", "over", "under"] },
         point: { type: ["number", "null"] },
       },

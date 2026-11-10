@@ -141,7 +141,7 @@ describe("public statistics", () => {
       picks: [],
     });
     expect(choices.leagues).toEqual([{ value: "soccer_spain_la_liga", label: "La Liga" }]);
-    expect(choices.markets).toEqual(["h2h", "totals"]);
+    expect(choices.markets).toEqual(["h2h", "totals", "spreads"]);
     expect(choices.confidence).toEqual(["low", "medium", "high"]);
     expect(choices.models).toEqual(["google/b", "openai/a"]);
     expect(choices.prompts).toEqual(["vote-v1"]);

@@ -3,7 +3,7 @@ import type { ConsensusMode } from "@/server/domain/predictions/ai-pick";
 import { PROMPTS } from "@/server/integrations/openrouter/prompt";
 
 export const SPORT_GROUPS = ["soccer", "basketball", "nba", "tennis"] as const;
-export const MARKETS = ["h2h", "totals"] as const;
+export const MARKETS = ["h2h", "totals", "spreads"] as const;
 
 export type SportGroup = (typeof SPORT_GROUPS)[number];
 export type Market = (typeof MARKETS)[number];
@@ -15,6 +15,9 @@ export type SportThresholds = {
   minBookmakers: number;
   totalsPointMin: number;
   totalsPointMax: number;
+  spreadsPointMin: number;
+  spreadsPointMax: number;
+  spreadsExcludedAbs: number[];
 };
 
 export type LeagueSetting = {
@@ -75,6 +78,9 @@ const soccerThresholds: SportThresholds = {
   minBookmakers: 3,
   totalsPointMin: 0.5,
   totalsPointMax: 5.5,
+  spreadsPointMin: -2.5,
+  spreadsPointMax: 2.5,
+  spreadsExcludedAbs: [],
 };
 
 const basketballThresholds: SportThresholds = {
@@ -84,6 +90,9 @@ const basketballThresholds: SportThresholds = {
   minBookmakers: 3,
   totalsPointMin: 140,
   totalsPointMax: 190,
+  spreadsPointMin: -20.5,
+  spreadsPointMax: 20.5,
+  spreadsExcludedAbs: [],
 };
 
 const nbaThresholds: SportThresholds = {
@@ -93,6 +102,9 @@ const nbaThresholds: SportThresholds = {
   minBookmakers: 3,
   totalsPointMin: 200,
   totalsPointMax: 260,
+  spreadsPointMin: -18.5,
+  spreadsPointMax: 18.5,
+  spreadsExcludedAbs: [],
 };
 
 const tennisThresholds: SportThresholds = {
@@ -102,6 +114,9 @@ const tennisThresholds: SportThresholds = {
   minBookmakers: 3,
   totalsPointMin: 16,
   totalsPointMax: 45,
+  spreadsPointMin: -8.5,
+  spreadsPointMax: 8.5,
+  spreadsExcludedAbs: [1.5],
 };
 
 export function isSportGroup(value: string): value is SportGroup {
@@ -201,7 +216,7 @@ export function hydrateSettings(settings: AdminSettings): AdminSettings {
 export function defaultSettings(model = DEFAULT_LLM_MODEL): AdminSettings {
   return {
     region: "eu",
-    markets: ["h2h", "totals"],
+    markets: ["h2h", "totals", "spreads"],
     leagues: LEAGUE_CATALOG.map((league) => ({ ...league, enabled: true })),
     thresholds: {
       soccer: { ...soccerThresholds },
@@ -227,6 +242,9 @@ const thresholdsSchema = z.object({
   minBookmakers: z.number().int().min(1).max(30),
   totalsPointMin: z.number().positive(),
   totalsPointMax: z.number().positive(),
+  spreadsPointMin: z.number().finite(),
+  spreadsPointMax: z.number().finite(),
+  spreadsExcludedAbs: z.array(z.number().nonnegative()).max(6),
 });
 
 export const adminSettingsSchema = z
@@ -296,6 +314,13 @@ export const adminSettingsSchema = z
           message: "totals_range",
         });
       }
+      if (thresholds.spreadsPointMin > thresholds.spreadsPointMax) {
+        context.addIssue({
+          code: "custom",
+          path: ["thresholds", group, "spreadsPointMin"],
+          message: "spreads_range",
+        });
+      }
     }
 
     const enabled = value.leagues.filter((league) => league.enabled);
@@ -349,6 +374,7 @@ export type SettingsError =
   | "reserve"
   | "odds_range"
   | "totals_range"
+  | "spreads_range"
   | "leagues"
   | "duplicate"
   | "free_model"
@@ -362,7 +388,7 @@ function numberField(formData: FormData, name: string): number {
   return Number(formData.get(name));
 }
 
-function thresholdsFromForm(formData: FormData, group: SportGroup): SportThresholds {
+function thresholdsFromForm(formData: FormData, group: SportGroup, current: SportThresholds): SportThresholds {
   return {
     evThreshold: numberField(formData, `${group}.evPercent`) / 100,
     oddsMin: numberField(formData, `${group}.oddsMin`),
@@ -370,6 +396,9 @@ function thresholdsFromForm(formData: FormData, group: SportGroup): SportThresho
     minBookmakers: numberField(formData, `${group}.minBookmakers`),
     totalsPointMin: numberField(formData, `${group}.totalsPointMin`),
     totalsPointMax: numberField(formData, `${group}.totalsPointMax`),
+    spreadsPointMin: numberField(formData, `${group}.spreadsPointMin`),
+    spreadsPointMax: numberField(formData, `${group}.spreadsPointMax`),
+    spreadsExcludedAbs: current.spreadsExcludedAbs,
   };
 }
 
@@ -400,7 +429,7 @@ export function parseSettingsForm(
   }
 
   const thresholds = Object.fromEntries(
-    SPORT_GROUPS.map((group) => [group, thresholdsFromForm(formData, group)]),
+    SPORT_GROUPS.map((group) => [group, thresholdsFromForm(formData, group, current.thresholds[group])]),
   ) as Record<SportGroup, SportThresholds>;
 
   const parsed = adminSettingsSchema.safeParse({
@@ -440,6 +469,7 @@ export function parseSettingsForm(
       message === "reserve" ||
       message === "odds_range" ||
       message === "totals_range" ||
+      message === "spreads_range" ||
       message === "leagues" ||
       message === "duplicate" ||
       message === "free_model" ||

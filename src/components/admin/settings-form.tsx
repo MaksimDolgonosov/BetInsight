@@ -5,7 +5,7 @@ import { Panel } from "@/components/admin/panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { saveSettingsAction } from "@/server/admin/actions";
-import { SPORT_GROUPS, type AdminSettings, type SportGroup } from "@/server/domain/settings";
+import { MARKETS, SPORT_GROUPS, type AdminSettings, type SportGroup } from "@/server/domain/settings";
 import { useTranslations } from "next-intl";
 
 const groups: SportGroup[] = [...SPORT_GROUPS];
@@ -63,7 +63,7 @@ export function SettingsForm({
 
       <Panel title={t("marketsTitle")} description={t("marketsDescription")}>
         <div className="flex flex-wrap gap-4">
-          {(["h2h", "totals"] as const).map((market) => (
+          {MARKETS.map((market) => (
             <label key={market} className="flex items-center gap-2 text-sm">
               <input
                 className="size-4"
@@ -103,6 +103,12 @@ export function SettingsForm({
             </Field>
             <Field label={t("totalsMax")}>
               <Input name={`${group}.totalsPointMax`} type="number" min="0.5" step="0.5" defaultValue={settings.thresholds[group].totalsPointMax} required />
+            </Field>
+            <Field label={t("spreadsMin")}>
+              <Input name={`${group}.spreadsPointMin`} type="number" step="0.5" defaultValue={settings.thresholds[group].spreadsPointMin} required />
+            </Field>
+            <Field label={t("spreadsMax")}>
+              <Input name={`${group}.spreadsPointMax`} type="number" step="0.5" defaultValue={settings.thresholds[group].spreadsPointMax} required />
             </Field>
           </div>
         </Panel>

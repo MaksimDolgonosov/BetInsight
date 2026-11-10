@@ -59,7 +59,18 @@ export function expectedValue(consensusProb: number, bestPrice: number): number 
 }
 
 function groupKey(quote: NormalizedQuote): string {
+  if (quote.market === "spreads") {
+    const homePoint = spreadHomePoint(quote);
+    return homePoint == null ? `spreads:invalid:${quote.bookmakerKey}:${quote.selection}:${quote.point ?? ""}` : `spreads:${homePoint}`;
+  }
   return `${quote.market}:${quote.point ?? ""}`;
+}
+
+function spreadHomePoint(quote: Pick<NormalizedQuote, "selection" | "point">): number | null {
+  if (quote.point == null || !Number.isFinite(quote.point)) return null;
+  if (quote.selection === "home") return quote.point;
+  if (quote.selection === "away") return -quote.point;
+  return null;
 }
 
 export function evaluateQuotes(
@@ -88,6 +99,18 @@ export function evaluateQuotes(
       byBookmaker.set(quote.bookmakerKey, selections);
     }
 
+    if (bucket[0]?.market === "spreads") {
+      for (const [bookmaker, selections] of byBookmaker) {
+        const home = selections.get("home");
+        const away = selections.get("away");
+        const paired =
+          home?.point != null &&
+          away?.point != null &&
+          Math.abs(home.point + away.point) < 1e-6;
+        if (!paired) byBookmaker.delete(bookmaker);
+      }
+    }
+
     const fairBySelection = new Map<
       Selection,
       { bookmakerKey: string; bookmaker: string; probability: number }[]
@@ -113,11 +136,8 @@ export function evaluateQuotes(
     }
 
     const sample = bucket[0]!;
-    const lineAllowed =
-      sample.market !== "totals" ||
-      (sample.point != null &&
-        sample.point >= thresholds.totalsPointMin &&
-        sample.point <= thresholds.totalsPointMax);
+    const homePoint = sample.market === "spreads" ? spreadHomePoint([...byBookmaker.values()][0]?.get("home") ?? sample) : null;
+    const lineAllowed = lineInsideRange(sample.market, sample.point, homePoint, thresholds);
 
     for (const [selection, rows] of fairBySelection) {
       const best = bestBySelection.get(selection);
@@ -135,7 +155,7 @@ export function evaluateQuotes(
       evaluations.push({
         market: sample.market,
         selection,
-        point: sample.point,
+        point: best.point,
         consensusProb,
         bestPrice: best.price,
         bestBookmaker: best.bookmaker,
@@ -148,6 +168,20 @@ export function evaluateQuotes(
   }
 
   return evaluations.sort((left, right) => right.ev - left.ev);
+}
+
+function lineInsideRange(
+  market: Market,
+  point: number | null,
+  homePoint: number | null,
+  thresholds: SportThresholds,
+): boolean {
+  if (market === "totals") {
+    return point != null && point >= thresholds.totalsPointMin && point <= thresholds.totalsPointMax;
+  }
+  if (market !== "spreads" || homePoint == null) return market !== "spreads";
+  if (homePoint < thresholds.spreadsPointMin || homePoint > thresholds.spreadsPointMax) return false;
+  return !thresholds.spreadsExcludedAbs.some((abs) => Math.abs(Math.abs(homePoint) - abs) < 1e-6);
 }
 
 export function thresholdsForGroup(

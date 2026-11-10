@@ -1,8 +1,9 @@
 import "server-only";
 import { z } from "zod";
 import { getAdminStore } from "@/server/admin/store";
+import { buildCreditCoverage, closingLeagueDays, marketsForRequest, resolveOddsMarkets, shouldDropTennis, type UsageCreditRow } from "@/server/budget/coverage";
 import { thresholdsForGroup } from "@/server/domain/odds/evaluate";
-import { isSportGroup, LEAGUE_CATALOG, type Market } from "@/server/domain/settings";
+import { isSportGroup, LEAGUE_CATALOG, MARKETS, type AdminSettings, type Market } from "@/server/domain/settings";
 import { appBaseUrl, enqueueJob } from "@/server/integrations/qstash/enqueue";
 import { ensureDataSchedules } from "@/server/integrations/qstash/schedules";
 import { fetchLeagueOdds, fetchSportEvents, fetchSports, fetchSportScores, oddsApiMode } from "@/server/integrations/odds-api/client";
@@ -16,6 +17,7 @@ import {
   enabledLeagues,
   findCachedCall,
   hasUnsettledScores,
+  listMonthUsage,
   listPlanEvents,
   loadLatestOdds,
   rememberCall,
@@ -34,7 +36,8 @@ const SCORE_DAYS_FROM = 3;
 const paidSchema = z.object({
   sportKey: z.string().regex(/^[a-z0-9_]{3,80}$/),
   day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  purpose: z.enum(["opening", "closing", "retry"]),
+  purpose: z.enum(["opening", "closing", "retry", "prestart"]),
+  markets: z.array(z.enum(MARKETS)).optional(),
 });
 
 export async function runSyncSports(payload: unknown, now: Date): Promise<JobOutcome> {
@@ -108,10 +111,13 @@ export async function runPlanDay(payload: unknown, now: Date): Promise<JobOutcom
     now,
     work: async () => {
       const leagues = await enabledLeagues();
+      const settings = await getAdminStore().getSettings();
       const stored = await listPlanEvents();
+      const coverage = await creditCoverage(settings, stored, now);
       const calls = planDay({
         now,
         leagues,
+        coverage,
         events: stored.map((event) => ({
           sportKey: event.sportKey,
           commenceTime: event.commenceTime.toISOString(),
@@ -121,7 +127,7 @@ export async function runPlanDay(payload: unknown, now: Date): Promise<JobOutcom
       for (const call of calls) {
         const queued = await enqueueJob(
           call.job,
-          { sportKey: call.sportKey, day: call.day, purpose: call.purpose },
+          { sportKey: call.sportKey, day: call.day, purpose: call.purpose, ...(call.markets ? { markets: call.markets } : {}) },
           {
             notBefore: call.notBefore,
             deduplicationId: `${call.job}-${call.sportKey}-${call.day}-${call.purpose}`,
@@ -143,13 +149,26 @@ export async function runFetchOdds(payload: unknown, now: Date): Promise<JobOutc
     idempotencyKey: `fetch-odds:${sportKey}:${day}:${purpose}`,
     payload,
     now,
-    work: () => fetchOddsWork(sportKey, day, purpose, now),
+    work: () => fetchOddsWork(sportKey, day, purpose, now, parsed.data.markets, false),
+  });
+}
+
+export async function runFetchClosingOdds(payload: unknown, now: Date): Promise<JobOutcome> {
+  const parsed = paidSchema.safeParse(payload);
+  if (!parsed.success || parsed.data.purpose !== "prestart") throw new JobInputError("invalid_payload");
+  const { sportKey, day, purpose, markets } = parsed.data;
+  return runJob({
+    job: "fetch-closing-odds",
+    idempotencyKey: `fetch-closing-odds:${sportKey}:${day}:${purpose}`,
+    payload,
+    now,
+    work: () => fetchOddsWork(sportKey, day, purpose, now, markets, true),
   });
 }
 
 export async function runFetchScores(payload: unknown, now: Date): Promise<JobOutcome> {
   const parsed = paidSchema.safeParse(payload);
-  if (!parsed.success || parsed.data.purpose === "opening") throw new JobInputError("invalid_payload");
+  if (!parsed.success || (parsed.data.purpose !== "closing" && parsed.data.purpose !== "retry")) throw new JobInputError("invalid_payload");
   const { sportKey, day, purpose } = parsed.data;
   return runJob({
     job: "fetch-scores",
@@ -160,19 +179,36 @@ export async function runFetchScores(payload: unknown, now: Date): Promise<JobOu
   });
 }
 
-async function fetchOddsWork(sportKey: string, day: string, purpose: string, now: Date): Promise<JobOutcome> {
+async function fetchOddsWork(
+  sportKey: string,
+  day: string,
+  purpose: string,
+  now: Date,
+  planned: Market[] | undefined,
+  closing: boolean,
+): Promise<JobOutcome> {
   const settings = await getAdminStore().getSettings();
   const league = (await enabledLeagues()).find((item) => item.key === sportKey);
   if (!league) return { status: "skipped", detail: { reason: "league_disabled" } };
+  const coverage = await creditCoverage(settings, await listPlanEvents(), now);
+  const live = marketsForRequest(coverage);
+  if (sportKey.startsWith("tennis_") && shouldDropTennis(coverage, live)) {
+    return { status: "skipped", detail: { reason: "tennis_budget" } };
+  }
+  const markets = resolveOddsMarkets(settings.markets, planned, live);
+  if (markets.length === 0) return { status: "skipped", detail: { reason: "no_markets" } };
+  if (closing && !closingLeagueDays(coverage, markets, day).some((item) => item.sportKey === sportKey)) {
+    return { status: "skipped", detail: { reason: "closing_budget" } };
+  }
   const endpoint = `GET /v4/sports/${sportKey}/odds`;
   const cached = await findCachedCall({ endpoint, sportKey, day, purpose });
   if (cached) {
-    await saveOdds(eventsForMarkets(mapOddsEvents(cached.body).events, settings.markets), now);
-    await followWithModel(sportKey, day, now);
+    await saveOdds(eventsForMarkets(mapOddsEvents(cached.body).events, markets), now, { closing });
+    if (!closing) await followWithModel(sportKey, day, now);
     return { status: "skipped", detail: { reason: "duplicate_request" } };
   }
 
-  const expected = oddsRequestCost(settings.markets);
+  const expected = oddsRequestCost(markets);
   if (oddsApiMode() !== "mock") {
     const allowed = await budgetAllows({
       cost: expected,
@@ -186,7 +222,7 @@ async function fetchOddsWork(sportKey: string, day: string, purpose: string, now
     if (!allowed.ok) return { status: "skipped", detail: { reason: allowed.reason } };
   }
 
-  const result = await fetchLeagueOdds({ sportKey, region: settings.region, markets: settings.markets });
+  const result = await fetchLeagueOdds({ sportKey, region: settings.region, markets });
   if (!result.ok) throw new Error(result.error ?? "odds_failed");
   const cost = chargedCost(result.mocked, result.lastCost, expected);
   await rememberCall({
@@ -197,12 +233,12 @@ async function fetchOddsWork(sportKey: string, day: string, purpose: string, now
     cost,
     remaining: result.remaining,
     used: result.used,
-    params: { sportKey, day, purpose, region: settings.region, markets: settings.markets },
+    params: { sportKey, day, purpose, region: settings.region, markets },
     body: result.raw,
   });
-  await saveOdds(result.events, now);
-  await followWithModel(sportKey, day, now);
-  return { status: "done", detail: { events: result.events.length, cost } };
+  await saveOdds(result.events, now, { closing });
+  if (!closing) await followWithModel(sportKey, day, now);
+  return { status: "done", detail: { events: result.events.length, cost, markets } };
 }
 
 const evaluateSchema = z.object({
@@ -339,6 +375,39 @@ function eventsForMarkets(events: OddsEvent[], markets: Market[]): OddsEvent[] {
     ...event,
     quotes: event.quotes.filter((quote) => markets.includes(quote.market as Market)),
   }));
+}
+
+async function creditCoverage(settings: AdminSettings, stored: { sportKey: string; commenceTime: Date }[], now: Date) {
+  const usage = await listMonthUsage(now);
+  return buildCreditCoverage({
+    today: mskDate(now),
+    month: mskDate(now).slice(0, 7),
+    monthlyLimit: settings.monthlyCreditLimit,
+    reserveCredits: settings.reserveCredits,
+    markets: settings.markets,
+    now,
+    usage: usage.map(usageRow),
+    events: stored.map((event) => ({
+      sportKey: event.sportKey,
+      day: mskDate(event.commenceTime),
+      commenceTime: event.commenceTime.toISOString(),
+    })),
+  });
+}
+
+function usageRow(row: { cost: number; remaining: number | null; createdAt: Date; endpoint: string; params: unknown }): UsageCreditRow {
+  const params = row.params && typeof row.params === "object" ? row.params as Record<string, unknown> : {};
+  return {
+    cost: row.cost,
+    remaining: row.remaining,
+    createdAt: row.createdAt,
+    endpoint: row.endpoint,
+    params: {
+      sportKey: typeof params.sportKey === "string" ? params.sportKey : undefined,
+      day: typeof params.day === "string" ? params.day : undefined,
+      purpose: typeof params.purpose === "string" ? params.purpose : undefined,
+    },
+  };
 }
 
 function chargedCost(mocked: boolean, lastCost: number | null, expected: number): number {

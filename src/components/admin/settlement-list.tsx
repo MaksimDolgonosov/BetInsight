@@ -55,7 +55,7 @@ export function SettlementList({ candidates }: { candidates: SettlementCandidate
             <p className="text-sm text-muted-foreground">
               {format.dateTime(new Date(candidate.commenceTime), { dateStyle: "medium", timeStyle: "short" })}
               {" · "}
-              {markets(candidate.market as "h2h" | "totals")}
+              {markets(candidate.market as "h2h" | "totals" | "spreads")}
               {" · "}
               {selections(candidate.selection as "home" | "draw" | "away" | "over" | "under")}
               {candidate.point != null ? ` ${candidate.point}` : ""}

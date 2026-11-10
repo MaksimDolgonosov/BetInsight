@@ -22,7 +22,7 @@ function validEntries(overrides: Record<string, string | string[]> = {}) {
       "basketball_euroleague",
       "basketball_nba",
     ],
-    market: ["h2h", "totals"],
+    market: ["h2h", "totals", "spreads"],
     region: "eu",
     llmModel: "anthropic/claude-sonnet-5.5",
     promptVersion: "v1",
@@ -48,24 +48,32 @@ function validEntries(overrides: Record<string, string | string[]> = {}) {
     "soccer.minBookmakers": "3",
     "soccer.totalsPointMin": "0.5",
     "soccer.totalsPointMax": "5.5",
+    "soccer.spreadsPointMin": "-2.5",
+    "soccer.spreadsPointMax": "2.5",
     "basketball.evPercent": "2",
     "basketball.oddsMin": "1.5",
     "basketball.oddsMax": "4",
     "basketball.minBookmakers": "3",
     "basketball.totalsPointMin": "140",
     "basketball.totalsPointMax": "190",
+    "basketball.spreadsPointMin": "-20.5",
+    "basketball.spreadsPointMax": "20.5",
     "nba.evPercent": "2",
     "nba.oddsMin": "1.5",
     "nba.oddsMax": "4",
     "nba.minBookmakers": "3",
     "nba.totalsPointMin": "200",
     "nba.totalsPointMax": "260",
+    "nba.spreadsPointMin": "-18.5",
+    "nba.spreadsPointMax": "18.5",
     "tennis.evPercent": "2",
     "tennis.oddsMin": "1.5",
     "tennis.oddsMax": "4",
     "tennis.minBookmakers": "3",
     "tennis.totalsPointMin": "16",
     "tennis.totalsPointMax": "45",
+    "tennis.spreadsPointMin": "-8.5",
+    "tennis.spreadsPointMax": "8.5",
     ...overrides,
   };
 }
@@ -79,6 +87,9 @@ describe("parseSettingsForm", () => {
     expect(result.settings.leagues).toHaveLength(5);
     expect(result.settings.thresholds.nba.totalsPointMin).toBe(200);
     expect(result.settings.thresholds.tennis.totalsPointMax).toBe(45);
+    expect(result.settings.thresholds.soccer.spreadsPointMin).toBe(-2.5);
+    expect(result.settings.thresholds.tennis.spreadsExcludedAbs).toEqual([1.5]);
+    expect(result.settings.markets).toEqual(["h2h", "totals", "spreads"]);
     expect(result.settings.webSearchEnabled).toBe(false);
     expect(result.settings.aiPick.enabled).toBe(false);
     expect(result.settings.aiPick.models).toEqual([

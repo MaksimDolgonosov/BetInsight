@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { CreditCoverage } from "@/server/budget/coverage";
 import { claimDecision } from "@/server/jobs/claim";
 import { planDay } from "@/server/jobs/plan";
 import { isoWeekKey, mskDate } from "@/server/jobs/time";
@@ -45,7 +46,53 @@ describe("data job plan", () => {
       },
     ]);
   });
+
+  it("queues one pre-start odds request and drops tennis when the mandatory credits do not fit", () => {
+    const calls = planDay({
+      now,
+      leagues: [{ key: "soccer_spain_la_liga" }, { key: "tennis_atp_paris" }],
+      coverage: coverage(),
+      events: [
+        { sportKey: "soccer_spain_la_liga", commenceTime: "2026-11-08T16:00:00.000Z", status: "scheduled" },
+        { sportKey: "tennis_atp_paris", commenceTime: "2026-11-08T12:00:00.000Z", status: "scheduled" },
+      ],
+    });
+
+    expect(calls.map((call) => `${call.job}:${call.sportKey}`)).toEqual([
+      "fetch-odds:soccer_spain_la_liga",
+      "fetch-closing-odds:soccer_spain_la_liga",
+      "fetch-scores:soccer_spain_la_liga",
+    ]);
+    expect(calls[0]?.markets).toEqual(["h2h", "totals"]);
+    expect(calls[1]?.notBefore.toISOString()).toBe("2026-11-08T15:40:00.000Z");
+  });
 });
+
+function coverage(): CreditCoverage {
+  return {
+    remaining: 57,
+    reserveCredits: 50,
+    markets: ["h2h", "totals", "spreads"],
+    leagueDays: 2,
+    closingCreditsUsed: 0,
+    futureDays: [
+      {
+        sportKey: "soccer_spain_la_liga",
+        day: "2026-11-08",
+        firstCommence: "2026-11-08T16:00:00.000Z",
+        oddsPaid: false,
+        scoresPaid: false,
+      },
+      {
+        sportKey: "tennis_atp_paris",
+        day: "2026-11-08",
+        firstCommence: "2026-11-08T12:00:00.000Z",
+        oddsPaid: false,
+        scoresPaid: false,
+      },
+    ],
+  };
+}
 
 describe("job claim", () => {
   const now = new Date("2026-11-08T03:00:00.000Z");

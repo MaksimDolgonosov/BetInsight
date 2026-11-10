@@ -96,6 +96,36 @@ describe("automatic settlement", () => {
     });
   });
 
+  it("settles handicaps, including a push and a split quarter line", () => {
+    expect(
+      gradePrediction({ ...base, sportKey: "soccer_spain_la_liga", market: "spreads", selection: "home", point: -1.5, price: 1.9, homeScore: 2, awayScore: 0 }),
+    ).toMatchObject({ status: "won", profitUnits: 0.9 });
+    expect(
+      gradePrediction({ ...base, sportKey: "soccer_spain_la_liga", market: "spreads", selection: "away", point: 1.5, price: 1.9, homeScore: 2, awayScore: 0 }),
+    ).toMatchObject({ status: "lost", profitUnits: -1 });
+    expect(
+      gradePrediction({ ...base, sportKey: "soccer_spain_la_liga", market: "spreads", selection: "home", point: -1, homeScore: 2, awayScore: 1 }),
+    ).toMatchObject({ status: "void", profitUnits: 0 });
+    expect(
+      gradePrediction({ ...base, sportKey: "basketball_nba", market: "spreads", selection: "home", point: 0, price: 1.91, homeScore: 110, awayScore: 110 }),
+    ).toMatchObject({ status: "void", profitUnits: 0 });
+    expect(
+      gradePrediction({ ...base, sportKey: "soccer_spain_la_liga", market: "spreads", selection: "home", point: 0.25, price: 1.8, homeScore: 1, awayScore: 1 }),
+    ).toMatchObject({ status: "won", profitUnits: 0.4 });
+    expect(
+      gradePrediction({ ...base, sportKey: "soccer_spain_la_liga", market: "spreads", selection: "home", point: -0.75, price: 1.9, homeScore: 2, awayScore: 1 }),
+    ).toMatchObject({ status: "won", profitUnits: 0.45 });
+    expect(
+      gradePrediction({ ...base, sportKey: "soccer_spain_la_liga", market: "spreads", selection: "home", point: -0.25, price: 1.9, homeScore: 1, awayScore: 1 }),
+    ).toMatchObject({ status: "lost", profitUnits: -0.5 });
+    expect(
+      gradePrediction({ ...base, sportKey: "tennis_atp_paris", market: "spreads", selection: "home", point: -3.5, homeScore: 2, awayScore: 1 }),
+    ).toEqual({ action: "wait", reason: "incomplete" });
+    expect(
+      gradePrediction({ ...base, sportKey: "tennis_atp_paris", market: "spreads", selection: "home", point: -3.5, price: 1.8, homeScore: 12, awayScore: 8 }),
+    ).toMatchObject({ status: "won", profitUnits: 0.8 });
+  });
+
   it("waits for a match that has not finished", () => {
     expect(gradePrediction({ ...base, sportKey: "soccer_spain_la_liga", eventStatus: "live", homeScore: null, awayScore: null })).toEqual({
       action: "wait",

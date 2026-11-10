@@ -1,6 +1,6 @@
 import "server-only";
 import { runAiConsensus, runAiPredict, runAiResearch, runAiVote } from "@/server/jobs/ai";
-import { runEvaluateModel, runFetchOdds, runFetchScores, runPlanDay, runSyncEvents, runSyncSports } from "@/server/jobs/data";
+import { runEvaluateModel, runFetchClosingOdds, runFetchOdds, runFetchScores, runPlanDay, runSyncEvents, runSyncSports } from "@/server/jobs/data";
 import { runSettle } from "@/server/jobs/settle";
 import { runDailyReport, runPublish, runWeeklyReport } from "@/server/jobs/telegram";
 import type { JobOutcome } from "@/server/jobs/runner";
@@ -10,6 +10,7 @@ const DATA_JOBS = {
   "sync-events": runSyncEvents,
   "plan-day": runPlanDay,
   "fetch-odds": runFetchOdds,
+  "fetch-closing-odds": runFetchClosingOdds,
   "evaluate-model": runEvaluateModel,
   "ai-predict": runAiPredict,
   "ai-research": runAiResearch,

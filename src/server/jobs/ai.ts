@@ -4,7 +4,7 @@ import { getAdminStore } from "@/server/admin/store";
 import { startOfUtcDay, startOfUtcMonth } from "@/server/budget/budget";
 import { decideConsensus, marketFavoriteKey, outcomeKey, type ModelVoteInput, type PickRef } from "@/server/domain/predictions/ai-pick";
 import { decideAiPickPublication, predictionHash, samePoint, type CandidateQuote } from "@/server/domain/predictions/publish";
-import { isSportGroup, type Market } from "@/server/domain/settings";
+import { isSportGroup, MARKETS, type Market } from "@/server/domain/settings";
 import { appBaseUrl, enqueueJob } from "@/server/integrations/qstash/enqueue";
 import { VOTE_PROMPT_VERSION } from "@/server/integrations/openrouter/prompt";
 import { generateResearch } from "@/server/integrations/openrouter/research";
@@ -41,7 +41,7 @@ const consensusSchema = eventSchema.extend({
   deadline: z.string().datetime().optional(),
 });
 
-const MARKETS = new Set<Market>(["h2h", "totals"]);
+const MARKET_SET = new Set<Market>(MARKETS);
 const SELECTIONS = new Set(["home", "draw", "away", "over", "under"]);
 const CONFIDENCE = new Set(["low", "medium", "high"]);
 
@@ -377,7 +377,7 @@ function asQuote(row: { market: string; outcome: string; point: number | null; c
 }
 
 function asPick(row: { market: string; outcome: string; point: number | null }): PickRef[] {
-  if (!MARKETS.has(row.market as Market) || !SELECTIONS.has(row.outcome)) return [];
+  if (!MARKET_SET.has(row.market as Market) || !SELECTIONS.has(row.outcome)) return [];
   return [{ market: row.market as Market, selection: row.outcome as PickRef["selection"], point: row.point }];
 }
 

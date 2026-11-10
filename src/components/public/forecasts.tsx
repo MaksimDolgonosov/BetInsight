@@ -224,6 +224,7 @@ function when(iso: string, format: Awaited<ReturnType<typeof getFormatter>>, t: 
 }
 
 function pickCode(pick: PublicPick, t: Awaited<ReturnType<typeof getTranslations>>) {
+  if (pick.market === "spreads") return t(pick.selection === "away" ? "codeSpreadAway" : "codeSpreadHome", { point: signedPoint(pick.point) });
   if (pick.market === "totals") return t(pick.selection === "over" ? "codeOver" : "codeUnder", { point: pick.point ?? "" });
   if (pick.selection === "home") return t("codeHome");
   if (pick.selection === "away") return t("codeAway");
@@ -240,6 +241,11 @@ function confidenceClass(value: string | null) {
   if (value === "high") return "bg-[#c8ff2e1a] text-[var(--bi-accent)]";
   if (value === "medium") return "bg-[#a394ff1a] text-[var(--bi-ai)]";
   return "bg-[var(--bi-surface-2)] text-[var(--bi-text-2)]";
+}
+
+function signedPoint(point: number | null) {
+  if (point == null || !Number.isFinite(point)) return "";
+  return point > 0 ? `+${point}` : String(point);
 }
 
 function label(messages: Awaited<ReturnType<typeof getTranslations>>, key: string) {

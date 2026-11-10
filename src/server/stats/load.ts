@@ -415,11 +415,11 @@ async function readEvent(eventId: string): Promise<PublicEvent | null> {
   ]);
 
   const batch = snapshotBatch(snapshots, row.publishedAt);
-  const focusQuotes = batch.filter((item) => item.market === row.market && samePoint(item.point, row.point));
+  const focusQuotes = batch.filter((item) => sameQuoteLine(item.market, item.outcome, item.point, row.market, row.selection, row.point));
   const table = quoteTable(focusQuotes.map((item) => ({ bookmaker: item.bookmaker, selection: item.outcome, price: item.price })));
   const latest = latestByEvent(evaluations);
   const quotes = latest.map(asMarketQuote);
-  const line = quotes.filter((item) => item.market === row.market && samePoint(item.point, row.point));
+  const line = quotes.filter((item) => sameQuoteLine(item.market, item.selection, item.point, row.market, row.selection, row.point));
   const focus = line.find((item) => item.selection === row.selection) ?? null;
   const other = otherMarket(row.market, quotes);
   const consensus = consensusFor(consensusRows, eventId, row.id);
@@ -493,18 +493,28 @@ function asMarketQuote(row: typeof modelEvaluations.$inferSelect): MarketQuote {
 }
 
 function otherMarket(market: string, quotes: MarketQuote[]) {
-  if (market === "h2h") {
-    const totals = quotes.filter((item) => item.market === "totals");
-    const line = [...totals].sort((left, right) => right.ev - left.ev)[0];
-    if (!line) return null;
-    return {
-      market: "totals",
-      point: line.point,
-      quotes: totals.filter((item) => samePoint(item.point, line.point)),
-      skipped: !totals.some((item) => samePoint(item.point, line.point) && item.candidate),
-    };
-  }
-  const h2h = quotes.filter((item) => item.market === "h2h");
-  if (h2h.length === 0) return null;
-  return { market: "h2h", point: null, quotes: h2h, skipped: !h2h.some((item) => item.candidate) };
+  const others = quotes.filter((item) => item.market !== market);
+  const line = [...others].sort((left, right) => right.ev - left.ev)[0];
+  if (!line) return null;
+  const paired = others.filter((item) => sameQuoteLine(item.market, item.selection, item.point, line.market, line.selection, line.point));
+  return {
+    market: line.market,
+    point: line.point,
+    quotes: paired,
+    skipped: !paired.some((item) => item.candidate),
+  };
+}
+
+function sameQuoteLine(
+  market: string,
+  selection: string,
+  point: number | null,
+  focusMarket: string,
+  focusSelection: string,
+  focusPoint: number | null,
+): boolean {
+  if (market !== focusMarket) return false;
+  if (market !== "spreads") return samePoint(point, focusPoint);
+  if (point == null || focusPoint == null) return false;
+  return samePoint(point, focusPoint) || samePoint(point, focusSelection === "home" || focusSelection === "away" ? -focusPoint : focusPoint);
 }

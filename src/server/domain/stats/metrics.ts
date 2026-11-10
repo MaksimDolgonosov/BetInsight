@@ -1,3 +1,5 @@
+import { MARKETS } from "@/server/domain/settings";
+
 export type StatsTrack = "value" | "ai_pick";
 export type PickStatus = "pending" | "won" | "lost" | "void";
 
@@ -123,7 +125,6 @@ export type FilterChoices = {
   prompts: string[];
 };
 
-const MARKETS = ["h2h", "totals"];
 const CONFIDENCE = ["low", "medium", "high"];
 
 export function filterChoices(input: {

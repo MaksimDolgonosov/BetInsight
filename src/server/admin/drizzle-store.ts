@@ -7,6 +7,7 @@ import {
   defaultSettings,
   hydrateSettings,
   isSportGroup,
+  MARKETS,
   SPORT_GROUPS,
   type AdminSettings,
   type LeagueSetting,
@@ -558,6 +559,9 @@ function mergeThresholds(value: SportThresholds | undefined, fallback: SportThre
     minBookmakers: value.minBookmakers ?? fallback.minBookmakers,
     totalsPointMin: value.totalsPointMin ?? fallback.totalsPointMin,
     totalsPointMax: value.totalsPointMax ?? fallback.totalsPointMax,
+    spreadsPointMin: value.spreadsPointMin ?? fallback.spreadsPointMin,
+    spreadsPointMax: value.spreadsPointMax ?? fallback.spreadsPointMax,
+    spreadsExcludedAbs: value.spreadsExcludedAbs ?? fallback.spreadsExcludedAbs,
   };
 }
 
@@ -683,7 +687,7 @@ function toJobRun(row: typeof jobRuns.$inferSelect): JobRunRecord {
 }
 
 function isMarket(value: string): value is Market {
-  return value === "h2h" || value === "totals";
+  return (MARKETS as readonly string[]).includes(value);
 }
 
 function isJobStatus(value: string): value is JobStatus {
