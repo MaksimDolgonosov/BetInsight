@@ -164,7 +164,7 @@ const sportSchema = z.object({
 
 export type TrackedSport = {
   key: string;
-  group: "soccer" | "basketball" | "nba" | "tennis";
+  group: "soccer" | "basketball" | "nba" | "hockey" | "tennis";
   title: string;
   active: boolean;
 };
@@ -188,6 +188,7 @@ function groupForKey(key: string): TrackedSport["group"] | null {
   if (key === "basketball_nba") return "nba";
   if (key.startsWith("basketball_")) return "basketball";
   if (key.startsWith("soccer_")) return "soccer";
+  if (key === "icehockey_nhl") return "hockey";
   if (key.startsWith("tennis_")) return "tennis";
   return null;
 }

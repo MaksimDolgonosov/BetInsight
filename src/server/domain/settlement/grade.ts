@@ -1,6 +1,6 @@
 import { profitUnits, type SettlementStatus } from "@/server/domain/settlement/profit";
 
-export type ScoreSport = "soccer" | "basketball" | "tennis" | "other";
+export type ScoreSport = "soccer" | "basketball" | "hockey" | "tennis" | "other";
 
 export type GradeAction =
   | { action: "settle"; status: SettlementStatus; profitUnits: number }
@@ -23,6 +23,7 @@ const SELECTIONS = new Set(["home", "draw", "away", "over", "under"]);
 export function scoreSport(sportKey: string): ScoreSport {
   if (sportKey.startsWith("soccer")) return "soccer";
   if (sportKey.startsWith("basketball")) return "basketball";
+  if (sportKey.startsWith("icehockey")) return "hockey";
   if (sportKey.startsWith("tennis")) return "tennis";
   return "other";
 }

@@ -21,6 +21,7 @@ function validEntries(overrides: Record<string, string | string[]> = {}) {
       "soccer_uefa_champs_league",
       "basketball_euroleague",
       "basketball_nba",
+      "icehockey_nhl",
     ],
     market: ["h2h", "totals", "spreads"],
     region: "eu",
@@ -66,6 +67,14 @@ function validEntries(overrides: Record<string, string | string[]> = {}) {
     "nba.totalsPointMax": "260",
     "nba.spreadsPointMin": "-18.5",
     "nba.spreadsPointMax": "18.5",
+    "hockey.evPercent": "2",
+    "hockey.oddsMin": "1.5",
+    "hockey.oddsMax": "4",
+    "hockey.minBookmakers": "3",
+    "hockey.totalsPointMin": "4.5",
+    "hockey.totalsPointMax": "8.5",
+    "hockey.spreadsPointMin": "-2.5",
+    "hockey.spreadsPointMax": "2.5",
     "tennis.evPercent": "2",
     "tennis.oddsMin": "1.5",
     "tennis.oddsMax": "4",
@@ -84,7 +93,9 @@ describe("parseSettingsForm", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.settings.thresholds.soccer.evThreshold).toBeCloseTo(0.02);
-    expect(result.settings.leagues).toHaveLength(5);
+    expect(result.settings.leagues).toHaveLength(6);
+    expect(result.settings.thresholds.hockey.totalsPointMin).toBe(4.5);
+    expect(result.settings.thresholds.hockey.totalsPointMax).toBe(8.5);
     expect(result.settings.thresholds.nba.totalsPointMin).toBe(200);
     expect(result.settings.thresholds.tennis.totalsPointMax).toBe(45);
     expect(result.settings.thresholds.soccer.spreadsPointMin).toBe(-2.5);

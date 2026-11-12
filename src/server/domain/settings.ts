@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { ConsensusMode } from "@/server/domain/predictions/ai-pick";
 import { PROMPTS } from "@/server/integrations/openrouter/prompt";
 
-export const SPORT_GROUPS = ["soccer", "basketball", "nba", "tennis"] as const;
+export const SPORT_GROUPS = ["soccer", "basketball", "nba", "hockey", "tennis"] as const;
 export const MARKETS = ["h2h", "totals", "spreads"] as const;
 
 export type SportGroup = (typeof SPORT_GROUPS)[number];
@@ -62,6 +62,7 @@ export const LEAGUE_CATALOG: Omit<LeagueSetting, "enabled">[] = [
   { key: "soccer_uefa_champs_league", group: "soccer", title: "UEFA Champions League" },
   { key: "basketball_euroleague", group: "basketball", title: "Euroleague" },
   { key: "basketball_nba", group: "nba", title: "NBA" },
+  { key: "icehockey_nhl", group: "hockey", title: "NHL" },
 ];
 
 export const DEFAULT_LLM_MODEL = "anthropic/claude-sonnet-5.5";
@@ -104,6 +105,18 @@ const nbaThresholds: SportThresholds = {
   totalsPointMax: 260,
   spreadsPointMin: -18.5,
   spreadsPointMax: 18.5,
+  spreadsExcludedAbs: [],
+};
+
+const hockeyThresholds: SportThresholds = {
+  evThreshold: 0.02,
+  oddsMin: 1.5,
+  oddsMax: 4,
+  minBookmakers: 3,
+  totalsPointMin: 4.5,
+  totalsPointMax: 8.5,
+  spreadsPointMin: -2.5,
+  spreadsPointMax: 2.5,
   spreadsExcludedAbs: [],
 };
 
@@ -222,6 +235,7 @@ export function defaultSettings(model = DEFAULT_LLM_MODEL): AdminSettings {
       soccer: { ...soccerThresholds },
       basketball: { ...basketballThresholds },
       nba: { ...nbaThresholds },
+      hockey: { ...hockeyThresholds },
       tennis: { ...tennisThresholds },
     },
     llmModel: model,
@@ -266,6 +280,7 @@ export const adminSettingsSchema = z
       soccer: thresholdsSchema,
       basketball: thresholdsSchema,
       nba: thresholdsSchema,
+      hockey: thresholdsSchema,
       tennis: thresholdsSchema,
     }),
     llmModel: z.string().trim().min(3).max(120),

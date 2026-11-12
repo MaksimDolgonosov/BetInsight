@@ -12,6 +12,7 @@ const CLOSING_PRIORITY = [
   "soccer_spain_la_liga",
   "soccer_germany_bundesliga",
   "basketball_euroleague",
+  "icehockey_nhl",
 ];
 
 export type FutureLeagueDay = {

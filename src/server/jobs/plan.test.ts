@@ -116,13 +116,16 @@ describe("odds catalog and scores", () => {
         { key: "tennis_atp_paris_masters", group: "Tennis", title: "ATP Paris Masters", active: true, has_outrights: false },
         { key: "tennis_wta_finals", group: "Tennis", title: "WTA Finals", active: false, has_outrights: false },
         { key: "tennis_atp_outrights", group: "Tennis", title: "ATP Outrights", active: true, has_outrights: true },
+        { key: "icehockey_nhl", group: "Ice Hockey", title: "NHL", active: true, has_outrights: false },
+        { key: "icehockey_ahl", group: "Ice Hockey", title: "AHL", active: true, has_outrights: false },
         { key: "americanfootball_nfl", group: "American Football", title: "NFL", active: true, has_outrights: false },
       ],
       LEAGUE_CATALOG.map((league) => league.key),
     );
 
     expect(valid).toBe(true);
-    expect(sports.map((sport) => sport.key)).toEqual(["soccer_spain_la_liga", "tennis_atp_paris_masters"]);
+    expect(sports.map((sport) => sport.key)).toEqual(["soccer_spain_la_liga", "tennis_atp_paris_masters", "icehockey_nhl"]);
+    expect(sports.find((sport) => sport.key === "icehockey_nhl")?.group).toBe("hockey");
     expect(isoWeekKey("2024-12-31")).toBe("2025-W01");
   });
 

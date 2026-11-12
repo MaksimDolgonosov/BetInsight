@@ -40,6 +40,37 @@ describe("automatic settlement", () => {
     expect(gradePrediction({ ...base, sportKey: "basketball_euroleague", homeScore: 90, awayScore: 90 })).toMatchObject({ status: "void" });
   });
 
+  it("settles an NHL final, including overtime, and voids a draw", () => {
+    expect(gradePrediction({ ...base, sportKey: "icehockey_nhl", homeScore: 3, awayScore: 2, price: 1.8 })).toMatchObject({
+      status: "won",
+      profitUnits: 0.8,
+    });
+    expect(
+      gradePrediction({
+        ...base,
+        sportKey: "icehockey_nhl",
+        market: "totals",
+        selection: "over",
+        point: 5.5,
+        homeScore: 3,
+        awayScore: 2,
+      }),
+    ).toMatchObject({ status: "lost" });
+    expect(
+      gradePrediction({
+        ...base,
+        sportKey: "icehockey_nhl",
+        market: "spreads",
+        selection: "away",
+        point: 1.5,
+        price: 1.9,
+        homeScore: 3,
+        awayScore: 2,
+      }),
+    ).toMatchObject({ status: "won", profitUnits: 0.9 });
+    expect(gradePrediction({ ...base, sportKey: "icehockey_nhl", homeScore: 2, awayScore: 2 })).toMatchObject({ status: "void" });
+  });
+
   it("does not treat a 2:1 basketball feed as a finished score", () => {
     expect(gradePrediction({ ...base, sportKey: "basketball_nba", homeScore: 2, awayScore: 1 })).toEqual({
       action: "wait",

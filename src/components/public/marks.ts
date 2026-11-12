@@ -1,6 +1,7 @@
 export function sportMark(sportKey: string) {
   if (sportKey.startsWith("soccer")) return "⚽";
   if (sportKey.startsWith("basketball")) return "🏀";
+  if (sportKey.startsWith("icehockey")) return "🏒";
   if (sportKey.startsWith("tennis")) return "🎾";
   return "•";
 }

@@ -385,7 +385,7 @@
     },
     "settings": {
       "title": "Settings",
-      "description": "Leagues, markets, region, value thresholds and both LLM tracks. Totals ranges are separate for football, the Euroleague, the NBA and tennis.",
+      "description": "Leagues, markets, region, value thresholds and both LLM tracks. Totals ranges are separate for football, the Euroleague, the NBA, the NHL and tennis.",
       "leaguesTitle": "Leagues",
       "leaguesDescription": "Clear a league to keep it out of odds requests.",
       "newLeagueKey": "New league key",
@@ -395,6 +395,7 @@
       "soccer": "Football",
       "basketball": "Basketball",
       "nba": "NBA",
+      "hockey": "Ice hockey",
       "tennis": "Tennis",
       "marketsTitle": "Markets and region",
       "marketsDescription": "An /odds request for moneyline, totals and handicap in the eu region costs 3 credits. If the month's required requests do not fit, the handicap is dropped from the request first.",
