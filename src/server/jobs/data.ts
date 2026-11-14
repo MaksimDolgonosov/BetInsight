@@ -17,6 +17,7 @@ import {
   enabledLeagues,
   findCachedCall,
   hasUnsettledScores,
+  markScoresMissing,
   listMonthUsage,
   listPlanEvents,
   loadLatestOdds,
@@ -314,6 +315,7 @@ async function fetchScoresWork(sportKey: string, day: string, purpose: string, n
     const mapped = mapScores(cached.body);
     if (mapped.valid) {
       await saveScores(mapped.events, now);
+      await markScoresMissing(sportKey, mapped.events.map((event) => event.id), now);
       await followWithSettle(sportKey, day, purpose, now);
     }
     return { status: "skipped", detail: { reason: "duplicate_request" } };
@@ -351,6 +353,7 @@ async function fetchScoresWork(sportKey: string, day: string, purpose: string, n
     body: result.raw,
   });
   await saveScores(result.data, now);
+  await markScoresMissing(sportKey, result.data.map((event) => event.id), now);
   await followWithSettle(sportKey, day, purpose, now);
   return { status: "done", detail: { events: result.data.length, cost } };
 }

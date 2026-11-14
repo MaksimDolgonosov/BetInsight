@@ -1,6 +1,7 @@
 import "server-only";
 import { and, desc, eq, gte, gt, inArray, sql } from "drizzle-orm";
 import { budgetSnapshot, canSpend, startOfUtcDay, startOfUtcMonth } from "@/server/budget/budget";
+import { absentScoreIds } from "@/server/jobs/plan";
 import { alertBudget } from "@/server/integrations/telegram/alerts";
 import { getDb } from "@/server/db";
 import { apiPayloads, oddsSnapshots } from "@/server/db/data-tables";
@@ -191,6 +192,22 @@ export async function listPlanEvents() {
     })
     .from(events)
     .where(gte(events.commenceTime, since));
+}
+
+export async function markScoresMissing(sportKey: string, seenIds: string[], now: Date) {
+  const earliest = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
+  const rows = await getDb()
+    .select({ id: events.id, commenceTime: events.commenceTime, status: events.status })
+    .from(events)
+    .where(and(eq(events.sportKey, sportKey), gte(events.commenceTime, earliest)));
+  const missing = absentScoreIds({
+    events: rows.map((row) => ({ id: row.id, commenceTime: row.commenceTime.toISOString(), status: row.status })),
+    seenIds,
+    now,
+  });
+  if (missing.length === 0) return 0;
+  await getDb().update(events).set({ missingFromScores: true }).where(inArray(events.id, missing));
+  return missing.length;
 }
 
 export async function hasUnsettledScores(sportKey: string, now: Date): Promise<boolean> {

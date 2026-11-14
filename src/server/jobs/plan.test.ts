@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CreditCoverage } from "@/server/budget/coverage";
 import { claimDecision } from "@/server/jobs/claim";
-import { planDay } from "@/server/jobs/plan";
+import { absentScoreIds, planDay } from "@/server/jobs/plan";
 import { isoWeekKey, mskDate } from "@/server/jobs/time";
 import { mapScores, mapTrackedSports } from "@/server/integrations/odds-api/schema";
 import { LEAGUE_CATALOG } from "@/server/domain/settings";
@@ -24,6 +24,21 @@ describe("data job plan", () => {
     expect(calls.map((call) => call.purpose)).toEqual(["opening", "closing"]);
     expect(calls[0]?.notBefore.toISOString()).toBe("2026-11-08T12:00:00.000Z");
     expect(calls[1]?.notBefore.toISOString()).toBe("2026-11-08T23:00:00.000Z");
+  });
+
+  it("marks a started match missing when the scores feed no longer contains it", () => {
+    const now = new Date("2026-11-14T06:30:00.000Z");
+    const ids = absentScoreIds({
+      now,
+      seenIds: ["later-match"],
+      events: [
+        { id: "finished", commenceTime: "2026-11-13T21:30:00.000Z", status: "scheduled" },
+        { id: "later-match", commenceTime: "2026-11-13T20:00:00.000Z", status: "scheduled" },
+        { id: "too-soon", commenceTime: "2026-11-14T05:00:00.000Z", status: "scheduled" },
+        { id: "done", commenceTime: "2026-11-13T18:00:00.000Z", status: "completed" },
+      ],
+    });
+    expect(ids).toEqual(["finished"]);
   });
 
   it("retries unsettled scores and ignores matches that already started", () => {

@@ -95,6 +95,22 @@ export function scoresRequestCost(daysFrom: number): number {
   return daysFrom >= 1 ? 2 : 1;
 }
 
+export function absentScoreIds(input: {
+  events: { id: string; commenceTime: string; status: string }[];
+  seenIds: string[];
+  now: Date;
+}): string[] {
+  const seen = new Set(input.seenIds);
+  const latest = input.now.getTime() - SCORES_LAG_MS;
+  const earliest = input.now.getTime() - SCORE_LOOKBACK_MS;
+  return input.events.flatMap((event) => {
+    if (event.status === "completed" || event.status === "void" || seen.has(event.id)) return [];
+    const commence = new Date(event.commenceTime).getTime();
+    if (commence > latest || commence < earliest) return [];
+    return [event.id];
+  });
+}
+
 function needsScoreRetry(event: PlanEvent, sportKey: string, now: Date): boolean {
   if (event.sportKey !== sportKey) return false;
   if (event.status === "completed" || event.status === "void") return false;
