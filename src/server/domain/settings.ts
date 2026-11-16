@@ -1,5 +1,12 @@
 import { z } from "zod";
 import type { ConsensusMode } from "@/server/domain/predictions/ai-pick";
+import {
+  DEFAULT_DAILY_LIMIT,
+  DEFAULT_DAILY_QUOTAS,
+  DEFAULT_DATA_SCORE_THRESHOLDS,
+  DEFAULT_SELECTION_WINDOW,
+  type DailyQuotas,
+} from "@/server/domain/selection";
 import { PROMPTS } from "@/server/integrations/openrouter/prompt";
 
 export const SPORT_GROUPS = ["soccer", "basketball", "nba", "hockey", "tennis"] as const;
@@ -41,6 +48,14 @@ export type AiPickSettings = {
   monthlyBudgetUsd: number;
 };
 
+export type SelectionSettings = {
+  windowMinHours: number;
+  windowMaxHours: number;
+  quotas: DailyQuotas;
+  dataScoreThreshold: number;
+  dataScoreLowConf: number;
+};
+
 export type AdminSettings = {
   region: string;
   markets: Market[];
@@ -51,6 +66,7 @@ export type AdminSettings = {
   webSearchEnabled: boolean;
   webSearchDailyLimit: number;
   aiPick: AiPickSettings;
+  selection: SelectionSettings;
   monthlyCreditLimit: number;
   reserveCredits: number;
   testRunsPerDay: number;
@@ -175,7 +191,7 @@ function defaultAiPick(): AiPickSettings {
     oddsMax: 2.5,
     minEv: -0.03,
     shortlistSize: 8,
-    dailyLimit: 3,
+    dailyLimit: DEFAULT_DAILY_LIMIT,
     monthlyBudgetUsd: 20,
   };
   return aiPickFromEnv(fallback);
@@ -223,6 +239,20 @@ export function hydrateSettings(settings: AdminSettings): AdminSettings {
     thresholds,
     webSearchDailyLimit: incoming.webSearchDailyLimit ?? defaults.webSearchDailyLimit,
     aiPick: mergeAiPick(incoming.aiPick, defaults.aiPick),
+    selection: mergeSelection(incoming.selection, defaults.selection),
+  };
+}
+
+function mergeSelection(stored: SelectionSettings | undefined, fallback: SelectionSettings): SelectionSettings {
+  return {
+    windowMinHours: stored?.windowMinHours ?? fallback.windowMinHours,
+    windowMaxHours: stored?.windowMaxHours ?? fallback.windowMaxHours,
+    quotas: {
+      perLeague: stored?.quotas?.perLeague ?? fallback.quotas.perLeague,
+      tennis: stored?.quotas?.tennis ?? fallback.quotas.tennis,
+    },
+    dataScoreThreshold: stored?.dataScoreThreshold ?? fallback.dataScoreThreshold,
+    dataScoreLowConf: stored?.dataScoreLowConf ?? fallback.dataScoreLowConf,
   };
 }
 
@@ -243,6 +273,13 @@ export function defaultSettings(model = DEFAULT_LLM_MODEL): AdminSettings {
     webSearchEnabled: true,
     webSearchDailyLimit: 12,
     aiPick: defaultAiPick(),
+    selection: {
+      windowMinHours: DEFAULT_SELECTION_WINDOW.minHours,
+      windowMaxHours: DEFAULT_SELECTION_WINDOW.maxHours,
+      quotas: { ...DEFAULT_DAILY_QUOTAS },
+      dataScoreThreshold: DEFAULT_DATA_SCORE_THRESHOLDS.voteMin,
+      dataScoreLowConf: DEFAULT_DATA_SCORE_THRESHOLDS.lowConfidenceMin,
+    },
     monthlyCreditLimit: 500,
     reserveCredits: 50,
     testRunsPerDay: 3,
@@ -299,6 +336,16 @@ export const adminSettingsSchema = z
       shortlistSize: z.number().int().min(1).max(8),
       dailyLimit: z.number().int().min(0).max(20),
       monthlyBudgetUsd: z.number().min(0).max(100),
+    }),
+    selection: z.object({
+      windowMinHours: z.number().int().min(0).max(168),
+      windowMaxHours: z.number().int().min(0).max(168),
+      quotas: z.object({
+        perLeague: z.number().int().min(1).max(8),
+        tennis: z.number().int().min(0).max(8),
+      }),
+      dataScoreThreshold: z.number().int().min(1).max(10),
+      dataScoreLowConf: z.number().int().min(1).max(10),
     }),
     monthlyCreditLimit: z.number().int().min(1).max(100000),
     reserveCredits: z.number().int().min(0),
@@ -382,6 +429,12 @@ export const adminSettingsSchema = z
     if (value.aiPick.oddsMin > value.aiPick.oddsMax) {
       context.addIssue({ code: "custom", path: ["aiPick", "oddsMin"], message: "ai_pick_range" });
     }
+    if (value.selection.windowMinHours > value.selection.windowMaxHours) {
+      context.addIssue({ code: "custom", path: ["selection", "windowMinHours"], message: "selection_window" });
+    }
+    if (value.selection.dataScoreLowConf > value.selection.dataScoreThreshold) {
+      context.addIssue({ code: "custom", path: ["selection", "dataScoreLowConf"], message: "data_score_range" });
+    }
   });
 
 export type SettingsError =
@@ -397,7 +450,9 @@ export type SettingsError =
   | "ai_pick_providers"
   | "ai_pick_alias"
   | "ai_pick_research"
-  | "ai_pick_range";
+  | "ai_pick_range"
+  | "selection_window"
+  | "data_score_range";
 
 function numberField(formData: FormData, name: string): number {
   return Number(formData.get(name));
@@ -473,6 +528,7 @@ export function parseSettingsForm(
       dailyLimit: numberField(formData, "aiPickDailyLimit"),
       monthlyBudgetUsd: numberField(formData, "aiPickMonthlyBudgetUsd"),
     },
+    selection: current.selection,
     monthlyCreditLimit: numberField(formData, "monthlyCreditLimit"),
     reserveCredits: numberField(formData, "reserveCredits"),
     testRunsPerDay: numberField(formData, "testRunsPerDay"),
@@ -491,7 +547,9 @@ export function parseSettingsForm(
       message === "ai_pick_providers" ||
       message === "ai_pick_alias" ||
       message === "ai_pick_research" ||
-      message === "ai_pick_range"
+      message === "ai_pick_range" ||
+      message === "selection_window" ||
+      message === "data_score_range"
     ) {
       return { ok: false, error: message };
     }

@@ -50,6 +50,17 @@ export type ModelEvaluationRecord = {
   isCandidate: boolean;
   nearMiss: boolean;
   aiPickShortlisted: boolean;
+  significanceScore?: number | null;
+  formHome?: number | null;
+  formAway?: number | null;
+  formDelta?: number | null;
+  formBonus?: number | null;
+  finalScore?: number | null;
+  dataScore?: number | null;
+  researchSummary?: string | null;
+  discardReason?: string | null;
+  lowConfidence?: boolean;
+  formSource?: "calculated" | "insufficient_data" | null;
   source: "job" | "test";
   createdAt: string;
 };

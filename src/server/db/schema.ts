@@ -4,7 +4,10 @@ import {
   index,
   integer,
   jsonb,
+  numeric,
   pgTable,
+  primaryKey,
+  smallint,
   text,
   timestamp,
   uniqueIndex,
@@ -12,6 +15,11 @@ import {
 } from "drizzle-orm/pg-core";
 import type { SportThresholds } from "@/server/domain/settings";
 export { apiPayloads, oddsSnapshots } from "./data-tables";
+
+export type StoredDailyQuotas = {
+  per_league: number;
+  tennis: number;
+};
 
 export const sports = pgTable("sports", {
   key: text("key").primaryKey(),
@@ -43,8 +51,13 @@ export const appSettings = pgTable("app_settings", {
   aiPickOddsMax: doublePrecision("ai_pick_odds_max").notNull().default(2.5),
   aiPickMinEv: doublePrecision("ai_pick_min_ev").notNull().default(-0.03),
   aiPickShortlistSize: integer("ai_pick_shortlist_size").notNull().default(8),
-  aiPickDailyLimit: integer("ai_pick_daily_limit").notNull().default(3),
+  aiPickDailyLimit: integer("ai_pick_daily_limit").notNull().default(8),
   aiPickMonthlyBudgetUsd: doublePrecision("ai_pick_monthly_budget_usd").notNull().default(20),
+  selectionWindowMinHours: smallint("selection_window_min_hours").notNull().default(20),
+  selectionWindowMaxHours: smallint("selection_window_max_hours").notNull().default(54),
+  dailyQuotas: jsonb("daily_quotas").$type<StoredDailyQuotas>().notNull().default({ per_league: 3, tennis: 2 }),
+  dataScoreThreshold: smallint("data_score_threshold").notNull().default(6),
+  dataScoreLowConf: smallint("data_score_low_conf").notNull().default(4),
   aiPickConfigured: boolean("ai_pick_configured").notNull().default(false),
   monthlyCreditLimit: integer("monthly_credit_limit").notNull(),
   reserveCredits: integer("reserve_credits").notNull(),
@@ -134,6 +147,17 @@ export const modelEvaluations = pgTable(
     isCandidate: boolean("is_candidate").notNull(),
     nearMiss: boolean("near_miss").notNull(),
     aiPickShortlisted: boolean("ai_pick_shortlisted").notNull(),
+    significanceScore: smallint("significance_score"),
+    formHome: numeric("form_home", { precision: 4, scale: 3, mode: "number" }),
+    formAway: numeric("form_away", { precision: 4, scale: 3, mode: "number" }),
+    formDelta: numeric("form_delta", { precision: 4, scale: 3, mode: "number" }),
+    formBonus: smallint("form_bonus"),
+    finalScore: smallint("final_score"),
+    dataScore: smallint("data_score"),
+    researchSummary: text("research_summary"),
+    discardReason: text("discard_reason"),
+    lowConfidence: boolean("low_confidence").notNull().default(false),
+    formSource: text("form_source"),
     source: text("source").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -242,6 +266,30 @@ export const tgMessages = pgTable(
     sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [uniqueIndex("tg_messages_dedupe_idx").on(table.dedupe)],
+);
+
+export const teamMeta = pgTable(
+  "team_meta",
+  {
+    teamName: text("team_name").notNull(),
+    sportKey: text("sport_key").notNull(),
+    leagueKey: text("league_key").notNull(),
+    tableRank: smallint("table_rank"),
+    isRelegation: boolean("is_relegation").notNull().default(false),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.teamName, table.leagueKey] })],
+);
+
+export const rivalryPairs = pgTable(
+  "rivalry_pairs",
+  {
+    sportKey: text("sport_key").notNull(),
+    teamA: text("team_a").notNull(),
+    teamB: text("team_b").notNull(),
+    label: text("label"),
+  },
+  (table) => [primaryKey({ columns: [table.sportKey, table.teamA, table.teamB] })],
 );
 
 export const auditLog = pgTable(

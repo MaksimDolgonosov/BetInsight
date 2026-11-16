@@ -110,6 +110,19 @@ describe("parseSettingsForm", () => {
     ]);
     expect(result.settings.aiPick.minEv).toBeCloseTo(-0.03);
     expect(result.settings.aiPick.probabilityTolerance).toBeCloseTo(0.02);
+    expect(result.settings.aiPick.dailyLimit).toBe(3);
+    expect(result.settings.selection).toEqual(defaultSettings().selection);
+  });
+
+  it("starts the selection pipeline at the version 1.5 defaults", () => {
+    expect(defaultSettings().aiPick.dailyLimit).toBe(8);
+    expect(defaultSettings().selection).toEqual({
+      windowMinHours: 20,
+      windowMaxHours: 54,
+      quotas: { perLeague: 3, tennis: 2 },
+      dataScoreThreshold: 6,
+      dataScoreLowConf: 4,
+    });
   });
 
   it("allows an EV threshold of zero", () => {

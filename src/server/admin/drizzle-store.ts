@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, isNotNull } from "drizzle-orm";
 import { getDb } from "@/server/db";
-import { aiConsensus, aiRequests, aiVotes, apiUsage, appSettings, auditLog, events, jobRuns, modelEvaluations, predictions, sports } from "@/server/db/schema";
+import { aiConsensus, aiRequests, aiVotes, apiUsage, appSettings, auditLog, events, jobRuns, modelEvaluations, predictions, sports, type StoredDailyQuotas } from "@/server/db/schema";
 import { startOfUtcDay } from "@/server/budget/budget";
 import {
   aiPickFromEnv,
@@ -14,6 +14,7 @@ import {
   type Market,
   type SportThresholds,
 } from "@/server/domain/settings";
+import { DEFAULT_DAILY_QUOTAS, type DailyQuotas } from "@/server/domain/selection";
 import { countEpoch } from "@/server/domain/stats/epoch";
 import { decideSettlement } from "@/server/domain/settlement/profit";
 import { groupModelSpend } from "@/server/admin/llm-spend";
@@ -499,6 +500,11 @@ function toSettingsRow(settings: AdminSettings) {
     aiPickShortlistSize: settings.aiPick.shortlistSize,
     aiPickDailyLimit: settings.aiPick.dailyLimit,
     aiPickMonthlyBudgetUsd: settings.aiPick.monthlyBudgetUsd,
+    selectionWindowMinHours: settings.selection.windowMinHours,
+    selectionWindowMaxHours: settings.selection.windowMaxHours,
+    dailyQuotas: storedQuotas(settings.selection.quotas),
+    dataScoreThreshold: settings.selection.dataScoreThreshold,
+    dataScoreLowConf: settings.selection.dataScoreLowConf,
     aiPickConfigured: true,
     monthlyCreditLimit: settings.monthlyCreditLimit,
     reserveCredits: settings.reserveCredits,
@@ -544,10 +550,28 @@ function toSettings(
       dailyLimit: row.aiPickDailyLimit,
       monthlyBudgetUsd: row.aiPickMonthlyBudgetUsd,
     },
+    selection: {
+      windowMinHours: row.selectionWindowMinHours,
+      windowMaxHours: row.selectionWindowMaxHours,
+      quotas: readQuotas(row.dailyQuotas),
+      dataScoreThreshold: row.dataScoreThreshold,
+      dataScoreLowConf: row.dataScoreLowConf,
+    },
     monthlyCreditLimit: row.monthlyCreditLimit,
     reserveCredits: row.reserveCredits,
     testRunsPerDay: row.testRunsPerDay,
   });
+}
+
+function storedQuotas(quotas: DailyQuotas): StoredDailyQuotas {
+  return { per_league: quotas.perLeague, tennis: quotas.tennis };
+}
+
+function readQuotas(value: StoredDailyQuotas | null | undefined): DailyQuotas {
+  return {
+    perLeague: value?.per_league ?? DEFAULT_DAILY_QUOTAS.perLeague,
+    tennis: value?.tennis ?? DEFAULT_DAILY_QUOTAS.tennis,
+  };
 }
 
 function mergeThresholds(value: SportThresholds | undefined, fallback: SportThresholds): SportThresholds {
@@ -614,6 +638,17 @@ function toEvaluation(row: typeof modelEvaluations.$inferSelect): ModelEvaluatio
     isCandidate: row.isCandidate,
     nearMiss: row.nearMiss,
     aiPickShortlisted: row.aiPickShortlisted,
+    significanceScore: row.significanceScore,
+    formHome: row.formHome,
+    formAway: row.formAway,
+    formDelta: row.formDelta,
+    formBonus: row.formBonus,
+    finalScore: row.finalScore,
+    dataScore: row.dataScore,
+    researchSummary: row.researchSummary,
+    discardReason: row.discardReason,
+    lowConfidence: row.lowConfidence,
+    formSource: row.formSource === "calculated" || row.formSource === "insufficient_data" ? row.formSource : null,
     source: row.source === "test" ? "test" : "job",
     createdAt: row.createdAt.toISOString(),
   };
