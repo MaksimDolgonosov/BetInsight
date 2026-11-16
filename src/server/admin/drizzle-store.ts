@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, isNotNull } from "drizzle-orm";
 import { getDb } from "@/server/db";
-import { aiConsensus, aiRequests, aiVotes, apiUsage, appSettings, auditLog, events, jobRuns, modelEvaluations, predictions, sports, type StoredDailyQuotas } from "@/server/db/schema";
+import { aiConsensus, aiRequests, aiVotes, apiUsage, appSettings, auditLog, events, jobRuns, modelEvaluations, predictions, rivalryPairs, sports, teamMeta, type StoredDailyQuotas } from "@/server/db/schema";
 import { startOfUtcDay } from "@/server/budget/budget";
 import {
   aiPickFromEnv,
@@ -19,6 +19,7 @@ import { countEpoch } from "@/server/domain/stats/epoch";
 import { decideSettlement } from "@/server/domain/settlement/profit";
 import { groupModelSpend } from "@/server/admin/llm-spend";
 import { testRunAllowance } from "@/server/admin/rate-limit";
+import type { RivalryInput, TeamMetaInput } from "@/server/domain/selection/reference";
 import {
   TEST_RUN_ENDPOINT,
   type AdminStore,
@@ -109,6 +110,74 @@ export class DrizzleAdminStore implements AdminStore {
         entity: "app_settings",
         payload: settings,
       });
+    });
+  }
+
+  listTeamMeta() {
+    return this.withDb(async (db) => {
+      const rows = await db.select().from(teamMeta);
+      return rows
+        .map((row) => ({
+          teamName: row.teamName,
+          sportKey: row.sportKey,
+          leagueKey: row.leagueKey,
+          tableRank: row.tableRank,
+          isRelegation: row.isRelegation,
+        }))
+        .sort((left, right) => left.leagueKey.localeCompare(right.leagueKey) || (left.tableRank ?? 99) - (right.tableRank ?? 99) || left.teamName.localeCompare(right.teamName));
+    });
+  }
+
+  saveTeamMeta(row: TeamMetaInput, actor: string) {
+    return this.withDb(async (db) => {
+      await db
+        .insert(teamMeta)
+        .values({ ...row, updatedAt: new Date() })
+        .onConflictDoUpdate({
+          target: [teamMeta.teamName, teamMeta.leagueKey],
+          set: { sportKey: row.sportKey, tableRank: row.tableRank, isRelegation: row.isRelegation, updatedAt: new Date() },
+        });
+      await db.insert(auditLog).values({ actor, action: "team_meta.save", entity: row.leagueKey, payload: row });
+    });
+  }
+
+  deleteTeamMeta(key: { teamName: string; leagueKey: string }, actor: string) {
+    return this.withDb(async (db) => {
+      await db.delete(teamMeta).where(and(eq(teamMeta.teamName, key.teamName), eq(teamMeta.leagueKey, key.leagueKey)));
+      await db.insert(auditLog).values({ actor, action: "team_meta.delete", entity: key.leagueKey, payload: key });
+    });
+  }
+
+  listRivalries() {
+    return this.withDb(async (db) => {
+      const rows = await db.select().from(rivalryPairs);
+      return rows
+        .map((row) => ({ sportKey: row.sportKey, teamA: row.teamA, teamB: row.teamB, label: row.label }))
+        .sort((left, right) => left.sportKey.localeCompare(right.sportKey) || left.teamA.localeCompare(right.teamA) || left.teamB.localeCompare(right.teamB));
+    });
+  }
+
+  saveRivalry(row: RivalryInput, actor: string) {
+    return this.withDb(async (db) => {
+      await db
+        .insert(rivalryPairs)
+        .values(row)
+        .onConflictDoUpdate({
+          target: [rivalryPairs.sportKey, rivalryPairs.teamA, rivalryPairs.teamB],
+          set: { label: row.label },
+        });
+      await db.insert(auditLog).values({ actor, action: "rivalry.save", entity: row.sportKey, payload: row });
+    });
+  }
+
+  deleteRivalry(key: { sportKey: string; teamA: string; teamB: string }, actor: string) {
+    return this.withDb(async (db) => {
+      await db.delete(rivalryPairs).where(and(
+        eq(rivalryPairs.sportKey, key.sportKey),
+        eq(rivalryPairs.teamA, key.teamA),
+        eq(rivalryPairs.teamB, key.teamB),
+      ));
+      await db.insert(auditLog).values({ actor, action: "rivalry.delete", entity: key.sportKey, payload: key });
     });
   }
 
@@ -649,6 +718,7 @@ function toEvaluation(row: typeof modelEvaluations.$inferSelect): ModelEvaluatio
     discardReason: row.discardReason,
     lowConfidence: row.lowConfidence,
     formSource: row.formSource === "calculated" || row.formSource === "insufficient_data" ? row.formSource : null,
+    roundStage: row.roundStage === "final" || row.roundStage === "semifinal" || row.roundStage === "quarterfinal" || row.roundStage === "round_of_16" ? row.roundStage : null,
     source: row.source === "test" ? "test" : "job",
     createdAt: row.createdAt.toISOString(),
   };

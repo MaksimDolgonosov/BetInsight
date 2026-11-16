@@ -158,6 +158,7 @@ export const modelEvaluations = pgTable(
     discardReason: text("discard_reason"),
     lowConfidence: boolean("low_confidence").notNull().default(false),
     formSource: text("form_source"),
+    roundStage: text("round_stage"),
     source: text("source").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },

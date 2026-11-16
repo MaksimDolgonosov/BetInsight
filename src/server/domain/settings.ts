@@ -528,7 +528,16 @@ export function parseSettingsForm(
       dailyLimit: numberField(formData, "aiPickDailyLimit"),
       monthlyBudgetUsd: numberField(formData, "aiPickMonthlyBudgetUsd"),
     },
-    selection: current.selection,
+    selection: {
+      windowMinHours: numberField(formData, "selectionWindowMinHours"),
+      windowMaxHours: numberField(formData, "selectionWindowMaxHours"),
+      quotas: {
+        perLeague: numberField(formData, "selectionPerLeague"),
+        tennis: numberField(formData, "selectionTennis"),
+      },
+      dataScoreThreshold: numberField(formData, "dataScoreThreshold"),
+      dataScoreLowConf: numberField(formData, "dataScoreLowConf"),
+    },
     monthlyCreditLimit: numberField(formData, "monthlyCreditLimit"),
     reserveCredits: numberField(formData, "reserveCredits"),
     testRunsPerDay: numberField(formData, "testRunsPerDay"),

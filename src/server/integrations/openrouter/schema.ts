@@ -46,6 +46,20 @@ export const voteSchema = z.object({
 
 export type VoteResult = z.infer<typeof voteSchema>;
 
+export const researchJsonSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["data_score", "has_injuries", "has_lineup", "h2h_available", "summary", "discard_reason"],
+  properties: {
+    data_score: { type: "integer", minimum: 1, maximum: 10 },
+    has_injuries: { type: "boolean" },
+    has_lineup: { type: "boolean" },
+    h2h_available: { type: "boolean" },
+    summary: { type: "string" },
+    discard_reason: { type: ["string", "null"] },
+  },
+} as const;
+
 export const predictionJsonSchema = {
   type: "object",
   additionalProperties: false,

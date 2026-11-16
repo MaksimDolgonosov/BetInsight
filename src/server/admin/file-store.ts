@@ -26,6 +26,7 @@ import {
   type StatsEpoch,
   type UsageDraft,
 } from "@/server/admin/types";
+import type { RivalryInput, TeamMetaInput } from "@/server/domain/selection/reference";
 
 type StoredEvent = {
   id: string;
@@ -62,6 +63,8 @@ type FileState = {
   events: StoredEvent[];
   predictions: StoredPrediction[];
   statsEpochStartedAt: string | null;
+  teamMeta: TeamMetaInput[];
+  rivalries: RivalryInput[];
 };
 
 function emptyState(): FileState {
@@ -77,6 +80,8 @@ function emptyState(): FileState {
     events: [],
     predictions: [],
     statsEpochStartedAt: null,
+    teamMeta: [],
+    rivalries: [],
   };
 }
 
@@ -111,6 +116,46 @@ export class FileAdminStore implements AdminStore {
     return this.update((state) => {
       state.settings = settings;
       pushAudit(state, actor, "settings.update", "app_settings", settings);
+    });
+  }
+
+  listTeamMeta() {
+    return this.read((state) => [...state.teamMeta].sort(byLeagueThenName));
+  }
+
+  saveTeamMeta(row: TeamMetaInput, actor: string) {
+    return this.update((state) => {
+      const index = state.teamMeta.findIndex((item) => item.teamName === row.teamName && item.leagueKey === row.leagueKey);
+      if (index >= 0) state.teamMeta[index] = row;
+      else state.teamMeta.push(row);
+      pushAudit(state, actor, "team_meta.save", row.leagueKey, row);
+    });
+  }
+
+  deleteTeamMeta(key: { teamName: string; leagueKey: string }, actor: string) {
+    return this.update((state) => {
+      state.teamMeta = state.teamMeta.filter((item) => item.teamName !== key.teamName || item.leagueKey !== key.leagueKey);
+      pushAudit(state, actor, "team_meta.delete", key.leagueKey, key);
+    });
+  }
+
+  listRivalries() {
+    return this.read((state) => [...state.rivalries].sort(bySportThenPair));
+  }
+
+  saveRivalry(row: RivalryInput, actor: string) {
+    return this.update((state) => {
+      const index = state.rivalries.findIndex((item) => item.sportKey === row.sportKey && item.teamA === row.teamA && item.teamB === row.teamB);
+      if (index >= 0) state.rivalries[index] = row;
+      else state.rivalries.push(row);
+      pushAudit(state, actor, "rivalry.save", row.sportKey, row);
+    });
+  }
+
+  deleteRivalry(key: { sportKey: string; teamA: string; teamB: string }, actor: string) {
+    return this.update((state) => {
+      state.rivalries = state.rivalries.filter((item) => item.sportKey !== key.sportKey || item.teamA !== key.teamA || item.teamB !== key.teamB);
+      pushAudit(state, actor, "rivalry.delete", key.sportKey, key);
     });
   }
 
@@ -326,6 +371,8 @@ export class FileAdminStore implements AdminStore {
         events: parsed.events ?? [],
         predictions: parsed.predictions ?? [],
         statsEpochStartedAt: parsed.statsEpochStartedAt ?? null,
+        teamMeta: parsed.teamMeta ?? [],
+        rivalries: parsed.rivalries ?? [],
       };
     } catch (error) {
       if (isMissingFile(error)) return emptyState();
@@ -337,6 +384,14 @@ export class FileAdminStore implements AdminStore {
     await mkdir(path.dirname(this.filePath), { recursive: true });
     await writeFile(this.filePath, JSON.stringify(state, null, 2));
   }
+}
+
+function byLeagueThenName(left: TeamMetaInput, right: TeamMetaInput): number {
+  return left.leagueKey.localeCompare(right.leagueKey) || (left.tableRank ?? 99) - (right.tableRank ?? 99) || left.teamName.localeCompare(right.teamName);
+}
+
+function bySportThenPair(left: RivalryInput, right: RivalryInput): number {
+  return left.sportKey.localeCompare(right.sportKey) || left.teamA.localeCompare(right.teamA) || left.teamB.localeCompare(right.teamB);
 }
 
 function statsEpoch(state: FileState): StatsEpoch {

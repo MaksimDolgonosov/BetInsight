@@ -26,6 +26,25 @@ export function classifyDataScore(
   return { action: "vote", lowConfidence: false, discardReason: null };
 }
 
+export function eventsReadyForVote(
+  rows: readonly { eventId: string; aiPickShortlisted: boolean; dataScore?: number | null }[],
+  thresholds: DataScoreThresholds = DEFAULT_DATA_SCORE_THRESHOLDS,
+): string[] {
+  const shortlisted = new Map<string, number>();
+  const scores = new Map<string, number>();
+  for (const row of rows) {
+    if (row.aiPickShortlisted) shortlisted.set(row.eventId, (shortlisted.get(row.eventId) ?? 0) + 1);
+    if (typeof row.dataScore === "number") scores.set(row.eventId, row.dataScore);
+  }
+  return [...shortlisted.keys()]
+    .filter((eventId) => (shortlisted.get(eventId) ?? 0) >= 2)
+    .filter((eventId) => {
+      const score = scores.get(eventId);
+      return score != null && classifyDataScore(score, thresholds).action !== "discard";
+    })
+    .sort();
+}
+
 export function gateByDataScore(input: {
   dataScore: number;
   modelDiscardReason?: string | null;

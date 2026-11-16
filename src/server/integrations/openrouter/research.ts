@@ -1,5 +1,7 @@
+import { parseResearchReport, type ResearchReport } from "@/server/domain/selection/research-report";
 import { sendChat, type ChatResult } from "@/server/integrations/openrouter/chat";
 import { renderResearchPrompt, RESEARCH_PROMPT_VERSION } from "@/server/integrations/openrouter/prompt";
+import { researchJsonSchema } from "@/server/integrations/openrouter/schema";
 
 export type GenerateResearchInput = {
   model: string;
@@ -15,6 +17,7 @@ export type GenerateResearchOutput = {
   costUsd: number | null;
   latencyMs: number;
   text: string;
+  report: ResearchReport | null;
   sources: string[];
   error: string | null;
   webSearch: boolean;
@@ -34,7 +37,7 @@ export async function generateResearch(
 
   let text = "";
   let sources: string[] = [];
-  let lastError = "empty_research";
+  let lastError = "invalid_research";
   let totals = { tokensIn: 0, tokensOut: 0, costUsd: 0, latencyMs: 0, model: input.model };
   let sawCost = false;
 
@@ -52,7 +55,8 @@ export async function generateResearch(
       if (response.costUsd != null) sawCost = true;
       text = response.content.trim();
       sources = [...new Set([...(response.sources ?? []), ...urlsIn(text)])].slice(0, 20);
-      if (text) {
+      const report = text ? parseResearchReport(text) : null;
+      if (report) {
         return {
           model: totals.model,
           promptVersion: RESEARCH_PROMPT_VERSION,
@@ -60,13 +64,14 @@ export async function generateResearch(
           tokensOut: totals.tokensOut,
           costUsd: sawCost ? totals.costUsd : null,
           latencyMs: totals.latencyMs,
-          text,
+          text: report.summary,
+          report,
           sources,
           error: null,
           webSearch: input.webSearch,
         };
       }
-      lastError = "empty_research";
+      lastError = text ? "invalid_research" : "empty_research";
     } catch (error) {
       totals.latencyMs += Date.now() - started;
       lastError = error instanceof Error ? error.message : "request_failed";
@@ -81,6 +86,7 @@ export async function generateResearch(
     costUsd: sawCost ? totals.costUsd : null,
     latencyMs: totals.latencyMs,
     text,
+    report: null,
     sources,
     error: lastError,
     webSearch: input.webSearch,
@@ -88,7 +94,7 @@ export async function generateResearch(
 }
 
 async function sendResearch(input: { model: string; prompt: string; webSearch: boolean }) {
-  return sendChat(input);
+  return sendChat({ ...input, jsonSchema: { name: "research_report", schema: researchJsonSchema } });
 }
 
 function urlsIn(text: string): string[] {
@@ -104,6 +110,7 @@ function emptyResearch(input: GenerateResearchInput, error: string): GenerateRes
     costUsd: null,
     latencyMs: 0,
     text: "",
+    report: null,
     sources: [],
     error,
     webSearch: input.webSearch,

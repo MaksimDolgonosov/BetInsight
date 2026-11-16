@@ -40,6 +40,8 @@ export type ScoredEvent = {
   away: string;
   commenceTime: Date;
   leagueClass: LeagueClass;
+  stage: RoundStage | null;
+  series: SeriesKind | null;
   significanceScore: number;
   formHome: number;
   formAway: number;
@@ -71,6 +73,8 @@ export function scoreEvent(event: ScheduleEvent, teamMeta: readonly TeamMeta[], 
     away: event.away,
     commenceTime: event.commenceTime,
     leagueClass,
+    stage,
+    series: event.series ?? null,
     significanceScore: significance,
     formHome: form.formHome,
     formAway: form.formAway,

@@ -12,6 +12,7 @@ import { scheduleModelFollowups } from "@/server/jobs/ai";
 import { evaluateLeague } from "@/server/jobs/evaluate";
 import { JobInputError } from "@/server/jobs/errors";
 import { oddsRequestCost, planDay, scoresRequestCost } from "@/server/jobs/plan";
+import { planSelection } from "@/server/jobs/selection";
 import {
   budgetAllows,
   enabledLeagues,
@@ -20,9 +21,13 @@ import {
   markScoresMissing,
   listMonthUsage,
   listPlanEvents,
+  listRivalries,
+  listSelectionEvents,
+  listTeamMeta,
   loadLatestOdds,
   rememberCall,
   replaceJobEvaluations,
+  saveSelectionScores,
   saveOdds,
   saveScores,
   saveSports,
@@ -136,7 +141,35 @@ export async function runPlanDay(payload: unknown, now: Date): Promise<JobOutcom
         );
         if (!queued.ok) throw new Error(queued.reason);
       }
-      return { status: "done", detail: { calls: calls.length } };
+      const leagueKeys = new Set(leagues.map((league) => league.key));
+      const selected = planSelection({
+        now,
+        events: (await listSelectionEvents(now, settings.selection.windowMaxHours)).filter((event) => leagueKeys.has(event.sportKey)),
+        teamMeta: await listTeamMeta(),
+        rivalries: await listRivalries(),
+        window: {
+          minHours: settings.selection.windowMinHours,
+          maxHours: settings.selection.windowMaxHours,
+        },
+        dailyLimit: settings.aiPick.dailyLimit,
+        quotas: settings.selection.quotas,
+      });
+      await saveSelectionScores(selected, now);
+      const day = mskDate(now);
+      if (settings.aiPick.enabled) {
+        for (const event of selected) {
+          const queued = await enqueueJob(
+            "ai-research",
+            { eventId: event.eventId, day },
+            { deduplicationId: `ai-research-${event.eventId}-${day}` },
+          );
+          if (!queued.ok) throw new Error(queued.reason);
+        }
+      }
+      return {
+        status: "done",
+        detail: { calls: calls.length, selected: selected.length, research: settings.aiPick.enabled ? selected.length : 0 },
+      };
     },
   });
 }
@@ -277,8 +310,18 @@ async function evaluateModelWork(sportKey: string, day: string, now: Date): Prom
       shortlistSize: settings.aiPick.shortlistSize,
     },
   });
-  await replaceJobEvaluations(loaded.map((event) => event.id), rows, now);
-  await scheduleModelFollowups({ rows, day, now, aiPickEnabled: settings.aiPick.enabled });
+  const stored = await replaceJobEvaluations(loaded.map((event) => event.id), rows, now);
+  await scheduleModelFollowups({
+    rows: stored,
+    day,
+    now,
+    aiPickEnabled: settings.aiPick.enabled,
+    models: settings.aiPick.models,
+    thresholds: {
+      voteMin: settings.selection.dataScoreThreshold,
+      lowConfidenceMin: settings.selection.dataScoreLowConf,
+    },
+  });
   return {
     status: "done",
     detail: {

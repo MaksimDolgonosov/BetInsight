@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_DATA_SCORE_THRESHOLDS } from "./constants";
-import { classifyDataScore, gateByDataScore } from "./data-score";
+import { classifyDataScore, eventsReadyForVote, gateByDataScore } from "./data-score";
 
 describe("classifyDataScore", () => {
   const thresholds = DEFAULT_DATA_SCORE_THRESHOLDS;
@@ -29,5 +29,20 @@ describe("classifyDataScore", () => {
       "no injuries or lineups",
     );
     expect(gateByDataScore({ dataScore: 8, modelDiscardReason: "ignored" }).action).toBe("vote");
+  });
+});
+
+describe("eventsReadyForVote", () => {
+  it("queues a shortlisted event only after the data score clears the discard line", () => {
+    const rows = [
+      { eventId: "thin", aiPickShortlisted: true, dataScore: 4 },
+      { eventId: "thin", aiPickShortlisted: true, dataScore: 4 },
+      { eventId: "empty", aiPickShortlisted: true, dataScore: 3 },
+      { eventId: "empty", aiPickShortlisted: true, dataScore: 3 },
+      { eventId: "waiting", aiPickShortlisted: true, dataScore: null },
+      { eventId: "waiting", aiPickShortlisted: true },
+      { eventId: "lone", aiPickShortlisted: true, dataScore: 9 },
+    ];
+    expect(eventsReadyForVote(rows)).toEqual(["thin"]);
   });
 });

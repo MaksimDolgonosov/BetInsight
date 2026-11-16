@@ -182,11 +182,34 @@ export function SettingsForm({
           <Field label={t("shortlistSize")} hint={t("shortlistHint")}>
             <Input name="aiPickShortlistSize" type="number" min="1" max="8" step="1" defaultValue={settings.aiPick.shortlistSize} required />
           </Field>
-          <Field label={t("aiPickDailyLimit")}>
+          <Field label={t("aiPickDailyLimit")} hint={t("aiPickDailyLimitHint")}>
             <Input name="aiPickDailyLimit" type="number" min="0" max="20" step="1" defaultValue={settings.aiPick.dailyLimit} required />
           </Field>
           <Field label={t("aiPickBudget")} hint={t("aiPickBudgetHint")}>
             <Input name="aiPickMonthlyBudgetUsd" type="number" min="0" max="100" step="1" defaultValue={settings.aiPick.monthlyBudgetUsd} required />
+          </Field>
+        </div>
+      </Panel>
+
+      <Panel title={t("selectionTitle")} description={t("selectionDescription")}>
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+          <Field label={t("windowMin")} hint={t("windowHint")}>
+            <Input name="selectionWindowMinHours" type="number" min="0" max="168" step="1" defaultValue={settings.selection.windowMinHours} required />
+          </Field>
+          <Field label={t("windowMax")}>
+            <Input name="selectionWindowMaxHours" type="number" min="0" max="168" step="1" defaultValue={settings.selection.windowMaxHours} required />
+          </Field>
+          <Field label={t("perLeague")}>
+            <Input name="selectionPerLeague" type="number" min="1" max="8" step="1" defaultValue={settings.selection.quotas.perLeague} required />
+          </Field>
+          <Field label={t("tennisQuota")}>
+            <Input name="selectionTennis" type="number" min="0" max="8" step="1" defaultValue={settings.selection.quotas.tennis} required />
+          </Field>
+          <Field label={t("dataScoreThreshold")} hint={t("dataScoreHint")}>
+            <Input name="dataScoreThreshold" type="number" min="1" max="10" step="1" defaultValue={settings.selection.dataScoreThreshold} required />
+          </Field>
+          <Field label={t("dataScoreLowConf")}>
+            <Input name="dataScoreLowConf" type="number" min="1" max="10" step="1" defaultValue={settings.selection.dataScoreLowConf} required />
           </Field>
         </div>
       </Panel>

@@ -32,6 +32,10 @@ export const STAGE_POINTS = {
 
 export type RoundStage = keyof typeof STAGE_POINTS;
 
+export function isRoundStage(value: string | null | undefined): value is RoundStage {
+  return value === "final" || value === "semifinal" || value === "quarterfinal" || value === "round_of_16";
+}
+
 export const FORM_WEIGHTS = [0.35, 0.25, 0.2, 0.12, 0.08] as const;
 export const FORM_VALUES = { W: 1, D: 0.4, L: 0 } as const;
 export const FORM_SAMPLE = 5;
@@ -39,6 +43,7 @@ export const MIN_FORM_MATCHES = 3;
 export const FORM_BONUS_SCALE = 15;
 export const SIGNIFICANCE_CAP = 100;
 
+export const SELECTION_MARKET = "selection";
 export const DEFAULT_SELECTION_WINDOW = { minHours: 20, maxHours: 54 };
 export const DEFAULT_DAILY_LIMIT = 8;
 export const DEFAULT_DAILY_QUOTAS = { perLeague: 3, tennis: 2 };

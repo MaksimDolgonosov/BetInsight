@@ -40,6 +40,12 @@ function validEntries(overrides: Record<string, string | string[]> = {}) {
     aiPickShortlistSize: "8",
     aiPickDailyLimit: "3",
     aiPickMonthlyBudgetUsd: "20",
+    selectionWindowMinHours: "20",
+    selectionWindowMaxHours: "54",
+    selectionPerLeague: "3",
+    selectionTennis: "2",
+    dataScoreThreshold: "6",
+    dataScoreLowConf: "4",
     monthlyCreditLimit: "500",
     reserveCredits: "50",
     testRunsPerDay: "3",
@@ -123,6 +129,23 @@ describe("parseSettingsForm", () => {
       dataScoreThreshold: 6,
       dataScoreLowConf: 4,
     });
+  });
+
+  it("saves the selection window and rejects an inverted one", () => {
+    const saved = parseSettingsForm(
+      form(validEntries({ selectionWindowMinHours: "12", selectionWindowMaxHours: "36" })),
+      defaultSettings(),
+    );
+    expect(saved.ok).toBe(true);
+    if (!saved.ok) return;
+    expect(saved.settings.selection.windowMinHours).toBe(12);
+    expect(saved.settings.selection.windowMaxHours).toBe(36);
+
+    const rejected = parseSettingsForm(
+      form(validEntries({ selectionWindowMinHours: "60", dataScoreLowConf: "8" })),
+      defaultSettings(),
+    );
+    expect(rejected).toEqual({ ok: false, error: "selection_window" });
   });
 
   it("allows an EV threshold of zero", () => {

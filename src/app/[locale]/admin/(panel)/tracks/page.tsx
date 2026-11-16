@@ -1,5 +1,6 @@
 import { Panel, Stat } from "@/components/admin/panel";
 import { loadTracks } from "@/server/admin/queries";
+import { selectionBoard, type RoundStage } from "@/server/domain/selection";
 import { getFormatter, getTranslations, setRequestLocale } from "next-intl/server";
 
 export default async function AdminTracksPage(props: { params: Promise<{ locale: string }> }) {
@@ -19,6 +20,7 @@ export default async function AdminTracksPage(props: { params: Promise<{ locale:
   const favoriteShare = decided.length === 0 ? null : decided.filter((row) => row.matchesMarketFavorite).length / decided.length;
   const votesById = new Map(data.votes.map((vote) => [vote.id, vote]));
   const paused = data.aiPickSpend >= data.settings.aiPick.monthlyBudgetUsd;
+  const selected = selectionBoard(data.evaluations);
 
   return (
     <div className="flex flex-col gap-6">
@@ -37,6 +39,52 @@ export default async function AdminTracksPage(props: { params: Promise<{ locale:
         <Stat label={t("nearMissCount")} value={format.number(nearMisses.length)} hint={meanEv == null ? t("noNearMiss") : t("meanEv", { value: format.number(meanEv, { style: "percent", maximumFractionDigits: 1 }) })} />
         <Stat label={t("favoriteShare")} value={favoriteShare == null ? "—" : format.number(favoriteShare, { style: "percent", maximumFractionDigits: 0 })} />
       </div>
+      <Panel title={t("selectionTitle")} description={t("selectionDescription")}>
+        {selected.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t("emptySelection")}</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px] text-left text-sm">
+              <thead className="text-xs text-muted-foreground">
+                <tr className="border-b">
+                  <th className="px-2 py-2 font-medium">{t("event")}</th>
+                  <th className="px-2 py-2 font-medium">{t("significance")}</th>
+                  <th className="px-2 py-2 font-medium">{t("form")}</th>
+                  <th className="px-2 py-2 font-medium">{t("finalScore")}</th>
+                  <th className="px-2 py-2 font-medium">{t("dataScore")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {selected.map((row) => (
+                  <tr key={row.eventId} className="border-b last:border-b-0">
+                    <td className="px-2 py-3">
+                      {row.home} — {row.away}
+                      <span className="mt-1 block text-muted-foreground">
+                        {row.formSource === "calculated" ? t("formCalculated") : t("formInsufficient")}
+                        {row.lowConfidence ? ` · ${t("lowConfidence")}` : ""}
+                        {row.discardReason ? ` · ${row.discardReason}` : ""}
+                      </span>
+                    </td>
+                    <td className="px-2 py-3">
+                      {format.number(row.significanceScore)}
+                      {row.roundStage ? <span className="mt-1 block text-muted-foreground">{t(roundLabel(row.roundStage))}</span> : null}
+                    </td>
+                    <td className="px-2 py-3">
+                      {format.number(row.formHome, { maximumFractionDigits: 2 })}
+                      {" / "}
+                      {format.number(row.formAway, { maximumFractionDigits: 2 })}
+                      {" · "}
+                      {format.number(row.formBonus)}
+                    </td>
+                    <td className="px-2 py-3">{format.number(row.finalScore)}</td>
+                    <td className="px-2 py-3">{row.dataScore == null ? "—" : format.number(row.dataScore)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
       {paused && data.settings.aiPick.enabled ? <p className="text-sm text-destructive">{t("paused")}</p> : null}
       {decided.length >= 5 && favoriteShare != null && favoriteShare > 0.9 ? (
         <p className="text-sm text-destructive">{t("favoriteWarning")}</p>
@@ -204,6 +252,13 @@ export default async function AdminTracksPage(props: { params: Promise<{ locale:
       </Panel>
     </div>
   );
+}
+
+function roundLabel(stage: RoundStage): "roundFinal" | "roundSemifinal" | "roundQuarterfinal" | "roundOf16" {
+  if (stage === "final") return "roundFinal";
+  if (stage === "semifinal") return "roundSemifinal";
+  if (stage === "quarterfinal") return "roundQuarterfinal";
+  return "roundOf16";
 }
 
 function label(messages: { (key: string): string; has: (key: string) => boolean }, key: string | null) {

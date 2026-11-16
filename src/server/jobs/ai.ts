@@ -3,13 +3,13 @@ import { z } from "zod";
 import { getAdminStore } from "@/server/admin/store";
 import { startOfUtcDay, startOfUtcMonth } from "@/server/budget/budget";
 import { decideConsensus, marketFavoriteKey, outcomeKey, type ModelVoteInput, type PickRef } from "@/server/domain/predictions/ai-pick";
+import { eventsReadyForVote, gateByDataScore, type DataScoreThresholds } from "@/server/domain/selection";
 import { decideAiPickPublication, predictionHash, samePoint, type CandidateQuote } from "@/server/domain/predictions/publish";
 import { isSportGroup, MARKETS, type Market } from "@/server/domain/settings";
 import { appBaseUrl, enqueueJob } from "@/server/integrations/qstash/enqueue";
 import { VOTE_PROMPT_VERSION } from "@/server/integrations/openrouter/prompt";
 import { generateResearch } from "@/server/integrations/openrouter/research";
 import { generateVote } from "@/server/integrations/openrouter/vote";
-import type { ModelRow } from "@/server/jobs/evaluate";
 import { JobInputError } from "@/server/jobs/errors";
 import {
   consensusExists,
@@ -25,7 +25,7 @@ import {
   votedModels,
   votesForEvent,
 } from "@/server/jobs/ai-store";
-import { enabledLeagues, loadLatestOdds } from "@/server/jobs/persist";
+import { enabledLeagues, loadLatestOdds, saveResearchScore } from "@/server/jobs/persist";
 import { runJob, type JobOutcome } from "@/server/jobs/runner";
 
 const eventSchema = z.object({
@@ -45,11 +45,17 @@ const MARKET_SET = new Set<Market>(MARKETS);
 const SELECTIONS = new Set(["home", "draw", "away", "over", "under"]);
 const CONFIDENCE = new Set(["low", "medium", "high"]);
 
-export async function scheduleModelFollowups(input: { rows: ModelRow[]; day: string; now: Date; aiPickEnabled: boolean }) {
+export async function scheduleModelFollowups(input: {
+  rows: { eventId: string; aiPickShortlisted: boolean; dataScore?: number | null }[];
+  day: string;
+  now: Date;
+  aiPickEnabled: boolean;
+  models: readonly string[];
+  thresholds: DataScoreThresholds;
+}) {
   if (!input.aiPickEnabled) return;
-  const pickIds = unique(input.rows.filter((row) => row.aiPickShortlisted).map((row) => row.eventId));
-  for (const eventId of pickIds) {
-    await deliverJob("ai-research", { eventId, day: input.day }, () => runAiResearch({ eventId, day: input.day }, input.now));
+  for (const eventId of eventsReadyForVote(input.rows, input.thresholds)) {
+    await queueVotes(eventId, input.day, input.now, input.models);
   }
 }
 
@@ -114,8 +120,7 @@ async function researchEvent(eventId: string, day: string, now: Date): Promise<J
   if (!settings.aiPick.enabled) return { status: "skipped", detail: { reason: "ai_pick_disabled" } };
   const context = await eventContext(eventId);
   if (!context) return { status: "skipped", detail: { reason: "event_missing" } };
-  const shortlist = context.evaluations.filter((row) => row.aiPickShortlisted);
-  if (shortlist.length < 2) return { status: "skipped", detail: { reason: "no_shortlist" } };
+  if (!context.evaluations.some((row) => row.finalScore != null)) return { status: "skipped", detail: { reason: "not_selected" } };
   if (now.getTime() >= context.event.commenceTime.getTime()) return { status: "skipped", detail: { reason: "too_late" } };
   const spent = await getAdminStore().aiSpendSince(startOfUtcMonth(now), ["research", "vote"]);
   if (spent >= settings.aiPick.monthlyBudgetUsd) return { status: "skipped", detail: { reason: "ai_pick_budget" } };
@@ -129,9 +134,9 @@ async function researchEvent(eventId: string, day: string, now: Date): Promise<J
     payload: {
       sportGroup: context.group,
       event: eventBrief(context.event),
-      shortlist,
     },
   });
+  const report = research.report;
   await getAdminStore().recordAiRequest({
     eventId,
     model: research.model,
@@ -140,24 +145,35 @@ async function researchEvent(eventId: string, day: string, now: Date): Promise<J
     tokensOut: research.tokensOut,
     costUsd: research.costUsd,
     latencyMs: research.latencyMs,
-    rawResponse: { content: research.text },
-    error: research.error,
+    rawResponse: { content: report?.summary ?? research.text, report },
+    error: report ? null : research.error,
     webSearch: research.webSearch,
     sources: research.sources,
     purpose: "research",
     source: "job",
   });
+  if (!report) throw new Error(research.error ?? "invalid_research");
 
-  for (const voter of settings.aiPick.models) {
-    await deliverJob("ai-vote", { eventId, day, model: voter }, () => runAiVote({ eventId, day, model: voter }, now));
+  const decision = gateByDataScore({
+    dataScore: report.dataScore,
+    modelDiscardReason: report.discardReason,
+    thresholds: dataScoreThresholds(settings),
+  });
+  await saveResearchScore(eventId, {
+    dataScore: report.dataScore,
+    researchSummary: report.summary,
+    discardReason: decision.discardReason,
+    lowConfidence: decision.lowConfidence,
+  }, now);
+  if (decision.action === "discard") {
+    return { status: "done", detail: { dataScore: report.dataScore, action: "discard", costUsd: research.costUsd } };
   }
-  await deliverJob(
-    "ai-consensus",
-    { eventId, day, deadline: new Date(now.getTime() + 10 * 60 * 1000).toISOString() },
-    () => Promise.resolve(),
-    { notBefore: new Date(now.getTime() + 10 * 60 * 1000), deduplicationId: `ai-consensus-${eventId}-${day}` },
-  );
-  return { status: "done", detail: { votes: settings.aiPick.models.length, costUsd: research.costUsd } };
+  const shortlist = (await latestJobEvaluations(eventId)).filter((row) => row.aiPickShortlisted);
+  if (shortlist.length >= 2) await queueVotes(eventId, day, now, settings.aiPick.models);
+  return {
+    status: "done",
+    detail: { dataScore: report.dataScore, action: decision.action, votes: shortlist.length >= 2, costUsd: research.costUsd },
+  };
 }
 
 async function voteEvent(eventId: string, day: string, model: string, now: Date): Promise<JobOutcome> {
@@ -180,6 +196,7 @@ async function voteEvent(eventId: string, day: string, model: string, now: Date)
       event: eventBrief(context.event),
       shortlist,
       research: research || null,
+      lowConfidence: context.evaluations.some((row) => row.lowConfidence),
     },
   });
   const requestId = await getAdminStore().recordAiRequest({
@@ -248,6 +265,7 @@ async function consensusEvent(eventId: string, day: string, now: Date): Promise<
       }),
     ),
   });
+  const thinData = context.evaluations.some((row) => row.lowConfidence);
   const quote = shortlist.find((row) => decision.pick && row.market === decision.pick.market && row.outcome === decision.pick.selection && samePoint(row.point, decision.pick.point)) ?? null;
   const publication = decideAiPickPublication({
     now,
@@ -264,7 +282,7 @@ async function consensusEvent(eventId: string, day: string, now: Date): Promise<
       : await storePick({
           event: context.event,
           track: "ai_pick",
-          pick: publication.pick,
+          pick: thinData ? { ...publication.pick, confidence: "low" } : publication.pick,
           model: decision.reasoningModel ?? settings.aiPick.models[0],
           promptVersion: VOTE_PROMPT_VERSION,
           now,
@@ -285,7 +303,7 @@ async function consensusEvent(eventId: string, day: string, now: Date): Promise<
     selection: decision.pick?.selection ?? null,
     point: decision.pick?.point ?? null,
     bestPrice: decision.bestPrice,
-    confidence: decision.confidence,
+    confidence: thinData ? "low" : decision.confidence,
     reasoningRu: decision.reasoning?.ru ?? null,
     reasoningEn: decision.reasoning?.en ?? null,
     matchesMarketFavorite: decision.matchesMarketFavorite,
@@ -401,6 +419,25 @@ function asVote(row: { model: string; market: string; selection: string; point: 
   }];
 }
 
+function dataScoreThresholds(settings: { selection: { dataScoreThreshold: number; dataScoreLowConf: number } }): DataScoreThresholds {
+  return {
+    voteMin: settings.selection.dataScoreThreshold,
+    lowConfidenceMin: settings.selection.dataScoreLowConf,
+  };
+}
+
+async function queueVotes(eventId: string, day: string, now: Date, models: readonly string[]) {
+  for (const voter of models) {
+    await deliverJob("ai-vote", { eventId, day, model: voter }, () => runAiVote({ eventId, day, model: voter }, now));
+  }
+  await deliverJob(
+    "ai-consensus",
+    { eventId, day, deadline: new Date(now.getTime() + 10 * 60 * 1000).toISOString() },
+    () => Promise.resolve(),
+    { notBefore: new Date(now.getTime() + 10 * 60 * 1000), deduplicationId: `ai-consensus-${eventId}-${day}` },
+  );
+}
+
 async function deliverJob(
   job: string,
   payload: unknown,
@@ -421,8 +458,4 @@ async function deliverJob(
 async function publishForecast(eventId: string) {
   const { queuePublish } = await import("@/server/jobs/telegram");
   await queuePublish({ kind: "forecast", eventId });
-}
-
-function unique(values: string[]): string[] {
-  return [...new Set(values)];
 }
