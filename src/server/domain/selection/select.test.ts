@@ -60,6 +60,7 @@ describe("selectDay", () => {
     const tooSoon = new Date("2026-11-16T12:00:00.000Z");
     const selected = selectDay({
       now: NOW,
+      window: { minHours: 20, maxHours: 54 },
       dailyLimit: 8,
       quotas: { perLeague: 3, tennis: 2 },
       events: [

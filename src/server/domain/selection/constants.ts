@@ -44,7 +44,7 @@ export const FORM_BONUS_SCALE = 15;
 export const SIGNIFICANCE_CAP = 100;
 
 export const SELECTION_MARKET = "selection";
-export const DEFAULT_SELECTION_WINDOW = { minHours: 20, maxHours: 54 };
+export const DEFAULT_SELECTION_WINDOW = { minHours: 4, maxHours: 24 };
 export const DEFAULT_DAILY_LIMIT = 8;
 export const DEFAULT_DAILY_QUOTAS = { perLeague: 3, tennis: 2 };
 export const DEFAULT_DATA_SCORE_THRESHOLDS = { voteMin: 6, lowConfidenceMin: 4 };

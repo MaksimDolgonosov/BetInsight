@@ -40,8 +40,8 @@ function validEntries(overrides: Record<string, string | string[]> = {}) {
     aiPickShortlistSize: "8",
     aiPickDailyLimit: "3",
     aiPickMonthlyBudgetUsd: "20",
-    selectionWindowMinHours: "20",
-    selectionWindowMaxHours: "54",
+    selectionWindowMinHours: "4",
+    selectionWindowMaxHours: "24",
     selectionPerLeague: "3",
     selectionTennis: "2",
     dataScoreThreshold: "6",
@@ -123,8 +123,8 @@ describe("parseSettingsForm", () => {
   it("starts the selection pipeline at the version 1.5 defaults", () => {
     expect(defaultSettings().aiPick.dailyLimit).toBe(8);
     expect(defaultSettings().selection).toEqual({
-      windowMinHours: 20,
-      windowMaxHours: 54,
+      windowMinHours: 4,
+      windowMaxHours: 24,
       quotas: { perLeague: 3, tennis: 2 },
       dataScoreThreshold: 6,
       dataScoreLowConf: 4,
