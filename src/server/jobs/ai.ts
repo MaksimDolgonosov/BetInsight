@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getAdminStore } from "@/server/admin/store";
 import { startOfUtcDay, startOfUtcMonth } from "@/server/budget/budget";
 import { decideConsensus, marketFavoriteKey, outcomeKey, type ModelVoteInput, type PickRef } from "@/server/domain/predictions/ai-pick";
+import { shortlistPricesReady, voteShortlist, type VoteCandidate } from "@/server/domain/predictions/vote-shortlist";
 import { eventsReadyForVote, gateByDataScore, type DataScoreThresholds } from "@/server/domain/selection";
 import { decideAiPickPublication, predictionHash, samePoint, type CandidateQuote } from "@/server/domain/predictions/publish";
 import { isSportGroup, MARKETS, type Market } from "@/server/domain/settings";
@@ -46,7 +47,7 @@ const SELECTIONS = new Set(["home", "draw", "away", "over", "under"]);
 const CONFIDENCE = new Set(["low", "medium", "high"]);
 
 export async function scheduleModelFollowups(input: {
-  rows: { eventId: string; aiPickShortlisted: boolean; dataScore?: number | null }[];
+  rows: { eventId: string; dataScore?: number | null }[];
   day: string;
   now: Date;
   aiPickEnabled: boolean;
@@ -102,6 +103,9 @@ export async function runAiConsensus(payload: unknown, now: Date): Promise<JobOu
   const parsed = consensusSchema.safeParse(payload);
   if (!parsed.success) throw new JobInputError("invalid_payload");
   const { eventId, day } = parsed.data;
+  const context = await eventContext(eventId);
+  const candidates = context ? candidatesFor(context.group, context.evaluations) : [];
+  if (context && !shortlistPricesReady(candidates)) return { status: "skipped", detail: { reason: "missing_price" } };
   return runJob({
     job: "ai-consensus",
     idempotencyKey: `ai-consensus:${eventId}:${day}`,
@@ -168,11 +172,10 @@ async function researchEvent(eventId: string, day: string, now: Date): Promise<J
   if (decision.action === "discard") {
     return { status: "done", detail: { dataScore: report.dataScore, action: "discard", costUsd: research.costUsd } };
   }
-  const shortlist = (await latestJobEvaluations(eventId)).filter((row) => row.aiPickShortlisted);
-  if (shortlist.length >= 2) await queueVotes(eventId, day, now, settings.aiPick.models);
+  await queueVotes(eventId, day, now, settings.aiPick.models);
   return {
     status: "done",
-    detail: { dataScore: report.dataScore, action: decision.action, votes: shortlist.length >= 2, costUsd: research.costUsd },
+    detail: { dataScore: report.dataScore, action: decision.action, votes: true, costUsd: research.costUsd },
   };
 }
 
@@ -180,7 +183,7 @@ async function voteEvent(eventId: string, day: string, model: string, now: Date)
   const settings = await getAdminStore().getSettings();
   const context = await eventContext(eventId);
   if (!context) return { status: "skipped", detail: { reason: "event_missing" } };
-  const shortlist = context.evaluations.filter((row) => row.aiPickShortlisted).flatMap(asPick);
+  const shortlist = candidatesFor(context.group, context.evaluations);
   if (shortlist.length < 2) return { status: "skipped", detail: { reason: "no_shortlist" } };
   if (now.getTime() >= context.event.commenceTime.getTime()) return { status: "skipped", detail: { reason: "too_late" } };
   if (!process.env.OPENROUTER_API_KEY) return { status: "skipped", detail: { reason: "missing_openrouter_key" } };
@@ -194,7 +197,13 @@ async function voteEvent(eventId: string, day: string, model: string, now: Date)
     payload: {
       sportGroup: context.group,
       event: eventBrief(context.event),
-      shortlist,
+      shortlist: shortlist.map((pick) => ({
+        market: pick.market,
+        selection: pick.selection,
+        point: pick.point,
+        consensusProb: pick.consensusProb,
+        bestPrice: pick.bestPrice,
+      })),
       research: research || null,
       lowConfidence: context.evaluations.some((row) => row.lowConfidence),
     },
@@ -251,12 +260,12 @@ async function consensusEvent(eventId: string, day: string, now: Date): Promise<
 
   const stored = await votesForEvent(eventId, start);
   const votes = stored.flatMap(asVote);
-  const shortlist = context.evaluations.filter((row) => row.aiPickShortlisted).map(asQuote);
+  const shortlist = candidatesFor(context.group, context.evaluations);
   const decision = decideConsensus({
     votes,
     modelCount: settings.aiPick.models.length,
     mode: settings.aiPick.consensusMode,
-    prices: shortlist.map((row) => ({ key: outcomeKey({ market: row.market as Market, selection: row.outcome as PickRef["selection"], point: row.point }), price: row.bestPrice })),
+    prices: shortlist.flatMap((row) => (row.bestPrice != null && row.bestPrice > 1 ? [{ key: outcomeKey(row), price: row.bestPrice }] : [])),
     tolerance: settings.aiPick.probabilityTolerance,
     marketFavoriteKey: marketFavoriteKey(
       context.evaluations.flatMap((row) => {
@@ -266,7 +275,7 @@ async function consensusEvent(eventId: string, day: string, now: Date): Promise<
     ),
   });
   const thinData = context.evaluations.some((row) => row.lowConfidence);
-  const quote = shortlist.find((row) => decision.pick && row.market === decision.pick.market && row.outcome === decision.pick.selection && samePoint(row.point, decision.pick.point)) ?? null;
+  const quote = candidateQuote(shortlist.find((row) => decision.pick && row.market === decision.pick.market && row.selection === decision.pick.selection && samePoint(row.point, decision.pick.point)));
   const publication = decideAiPickPublication({
     now,
     commenceTime: context.event.commenceTime,
@@ -390,8 +399,43 @@ function eventBrief(event: { id: string; home: string; away: string; commenceTim
   return { id: event.id, home: event.home, away: event.away, commenceTime: event.commenceTime.toISOString() };
 }
 
-function asQuote(row: { market: string; outcome: string; point: number | null; consensusProb: number; bestPrice: number; bestBookmaker: string; ev: number }): CandidateQuote {
-  return row;
+function candidatesFor(
+  sportGroup: Parameters<typeof voteShortlist>[0]["sportGroup"],
+  rows: readonly {
+    market: string;
+    outcome: string;
+    point: number | null;
+    consensusProb: number;
+    bestPrice: number;
+    bestBookmaker: string;
+    ev: number;
+  }[],
+): VoteCandidate[] {
+  return voteShortlist({
+    sportGroup,
+    outcomes: rows.map((row) => ({
+      market: row.market,
+      selection: row.outcome,
+      point: row.point,
+      consensusProb: row.consensusProb,
+      bestPrice: row.bestPrice,
+      bestBookmaker: row.bestBookmaker,
+      ev: row.ev,
+    })),
+  });
+}
+
+function candidateQuote(row: VoteCandidate | undefined): CandidateQuote | null {
+  if (!row || row.bestPrice == null || row.bestPrice <= 1 || row.consensusProb == null || row.ev == null || !row.bestBookmaker) return null;
+  return {
+    market: row.market,
+    outcome: row.selection,
+    point: row.point,
+    consensusProb: row.consensusProb,
+    bestPrice: row.bestPrice,
+    bestBookmaker: row.bestBookmaker,
+    ev: row.ev,
+  };
 }
 
 function asPick(row: { market: string; outcome: string; point: number | null }): PickRef[] {

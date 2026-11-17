@@ -19,9 +19,7 @@ export async function EventScreen({ locale, event }: { locale: string; event: Pu
   const status = await getTranslations("public.status");
   const format = await getFormatter();
   const pick = event.pick;
-  const implied = pick.price > 1 ? 1 / pick.price : null;
   const consensus = event.focus?.consensusProb ?? pick.modelProb;
-  const profit = pick.price - 1;
   const started = hasKickedOff(pick.commenceTime);
   const score = pick.homeScore != null && pick.awayScore != null ? `${pick.homeScore}:${pick.awayScore}` : null;
 
@@ -66,13 +64,7 @@ export async function EventScreen({ locale, event }: { locale: string; event: Pu
               <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
                 <div className="flex flex-col gap-2">
                   <h1 className="font-display text-[32px] leading-none font-semibold tracking-[-1px] lg:text-[40px]">{pickTitle(pick, t)}</h1>
-                  <p className="text-[14px] text-[var(--bi-text-2)]">
-                    {t("stake", { market: label(markets, pick.market), profit: signedNumber(format, profit, 2) })}
-                  </p>
-                </div>
-                <div className="flex w-fit flex-col gap-1 rounded-[16px] bg-[var(--bi-accent)] px-5 py-3 text-[var(--bi-ink)]">
-                  <span className="font-stat text-[40px] leading-none font-semibold">{format.number(pick.price, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                  <span className="text-[12px]">{t("bestPrice", { bookmaker: pick.bookmaker })}</span>
+                  <p className="text-[14px] text-[var(--bi-text-2)]">{t("stake", { market: label(markets, pick.market) })}</p>
                 </div>
               </div>
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -83,7 +75,6 @@ export async function EventScreen({ locale, event }: { locale: string; event: Pu
               </div>
               <div className="flex flex-col gap-3">
                 <p className="text-[14px] font-medium">{t("probability", { pick: pickTitle(pick, t) })}</p>
-                <Bar label={t("inPrice", { price: format.number(pick.price, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) })} value={implied} format={format} />
                 <Bar label={t("noMargin")} value={consensus} format={format} />
                 <Bar label={t("aiEstimate")} value={pick.aiProb} format={format} />
               </div>
@@ -114,47 +105,28 @@ export async function EventScreen({ locale, event }: { locale: string; event: Pu
                 </div>
                 {event.table.rows.length === 0 ? <p className="text-[13px] text-[var(--bi-text-3)]">{t("oddsEmpty")}</p> : (
                   <div className="overflow-x-auto">
-                    <table className="w-full min-w-[320px] text-left">
+                    <table className="w-full text-left">
                       <thead>
                         <tr className="font-stat text-[11px] tracking-[0.04em] text-[var(--bi-text-3)] uppercase">
-                          <th className="py-2 font-medium">{t("bookmaker")}</th>
-                          {event.table.selections.map((selection) => (
-                            <th key={selection} className="py-2 text-right font-medium">{label(selections, selection)}</th>
-                          ))}
-                          <th className="py-2 text-right font-medium">{t("margin")}</th>
+                          <th className="py-2 font-medium">{t("outcome")}</th>
+                          <th className="py-2 text-right font-medium">{t("marketPrice")}</th>
+                          <th className="py-2 text-right font-medium">{t("consensusRow")}</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {event.table.rows.map((row) => (
-                          <tr key={row.bookmaker} className="border-t border-[var(--bi-border)]">
-                            <td className="py-2.5 text-[14px]">{row.bookmaker}</td>
-                            {event.table.selections.map((selection) => {
-                              const price = row.prices[selection];
-                              const best = price != null && price === pick.price && row.bookmaker === pick.bookmaker && selection === pick.selection;
-                              return (
-                                <td key={selection} className={`py-2.5 text-right font-stat text-[14px] ${best ? "font-semibold text-[var(--bi-accent)]" : ""}`}>
-                                  {price == null ? "—" : format.number(price, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                </td>
-                              );
-                            })}
-                            <td className="py-2.5 text-right font-stat text-[14px] text-[var(--bi-text-2)]">{percent(format, row.margin)}</td>
+                        {marketReference(event).map((row) => (
+                          <tr key={row.selection} className="border-t border-[var(--bi-border)]">
+                            <td className={`py-2.5 text-[14px] ${row.selection === pick.selection ? "font-semibold text-[var(--bi-accent)]" : ""}`}>{label(selections, row.selection)}</td>
+                            <td className="py-2.5 text-right font-stat text-[14px]">{row.price == null ? "—" : format.number(row.price, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                            <td className="py-2.5 text-right font-stat text-[14px]">{percent(format, quoteFor(event.line, row.selection)?.consensusProb ?? null)}</td>
                           </tr>
                         ))}
-                        <tr className="border-t border-[var(--bi-border)]">
-                          <td className="py-2.5 text-[13px] text-[var(--bi-text-2)]">{t("consensusRow")}</td>
-                          {event.table.selections.map((selection) => (
-                            <td key={selection} className="py-2.5 text-right font-stat text-[14px]">{percent(format, quoteFor(event.line, selection)?.consensusProb ?? null)}</td>
-                          ))}
-                          <td />
-                        </tr>
                       </tbody>
                     </table>
                   </div>
                 )}
                 <p className="text-[12px] text-[var(--bi-text-3)]">
-                  {event.snapshotAt
-                    ? t("snapshot", { when: when(event.snapshotAt, format, home), count: format.number(event.bookmakers), region: event.region })
-                    : t("snapshotMissing")}
+                  {event.snapshotAt ? t("snapshot", { when: when(event.snapshotAt, format, home), region: event.region }) : t("snapshotMissing")}
                 </p>
               </article>
 
@@ -221,6 +193,16 @@ function Bar({ label, value, format }: { label: string; value: number | null; fo
 
 function Meta({ children }: { children: string }) {
   return <span className="rounded-full bg-[var(--bi-bg)] px-2.5 py-1 font-stat text-[12px] text-[var(--bi-text-2)]">{children}</span>;
+}
+
+function marketReference(event: PublicEvent) {
+  return event.table.selections.map((selection) => {
+    const prices = event.table.rows.flatMap((row) => {
+      const price = row.prices[selection];
+      return price != null && price > 1 ? [price] : [];
+    });
+    return { selection, price: prices.length === 0 ? null : Math.max(...prices) };
+  });
 }
 
 function quoteFor(quotes: MarketQuote[], selection: string) {

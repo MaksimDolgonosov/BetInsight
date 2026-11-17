@@ -33,7 +33,7 @@ describe("forecastMessage", () => {
     expect(message).toContain("Alpha &lt;FC&gt;");
     expect(message).toContain("Beta &amp; Co");
     expect(message).toContain("П1 Alpha &lt;FC&gt;");
-    expect(message).toContain("1,85");
+    expect(message).not.toContain("1,85");
     expect(message).toContain("высокая");
     expect(message).toContain("21:00 МСК");
     expect(message).toContain('href="https://bet.example/ru/events/event%201"');

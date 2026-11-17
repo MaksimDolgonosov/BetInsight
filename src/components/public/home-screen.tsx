@@ -190,7 +190,6 @@ export async function HomeScreen({
                 <span className="w-[110px]">{t("colStart")}</span>
                 <span className="min-w-0 flex-1">{t("colMatch")}</span>
                 <span className="w-[160px]">{t("colPick")}</span>
-                <span className="w-20">{t("colPrice")}</span>
                 <span className="w-16">{t("colEv")}</span>
                 <span className="w-[112px]">{t("colConfidence")}</span>
               </div>
@@ -222,12 +221,6 @@ export async function HomeScreen({
                         {pickCode(pick, t)}
                       </span>
                       <span className="truncate text-[13px] text-[var(--bi-text-2)]">{pickName(pick, selections)}</span>
-                    </div>
-                    <div className="flex w-20 flex-col gap-1">
-                      <span className="text-[17px] font-semibold">
-                        {format.number(pick.price, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </span>
-                      <span className="text-[11px] text-[var(--bi-text-3)]">{pick.bookmaker}</span>
                     </div>
                     <span className="w-16 text-[14px] font-semibold text-[var(--bi-win)]">
                       {pick.ev == null ? "—" : signedPercent(format, pick.ev)}
@@ -282,7 +275,6 @@ export async function HomeScreen({
                     <span className="text-[12px] text-[var(--bi-text-3)]">
                       {t("resultLine", {
                         code: pickCode(pick, t),
-                        price: format.number(pick.price, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
                         score: scoreOf(pick, t),
                       })}
                     </span>

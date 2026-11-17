@@ -33,16 +33,13 @@ describe("classifyDataScore", () => {
 });
 
 describe("eventsReadyForVote", () => {
-  it("queues a shortlisted event only after the data score clears the discard line", () => {
+  it("queues every event whose data score clears the discard line", () => {
     const rows = [
-      { eventId: "thin", aiPickShortlisted: true, dataScore: 4 },
-      { eventId: "thin", aiPickShortlisted: true, dataScore: 4 },
-      { eventId: "empty", aiPickShortlisted: true, dataScore: 3 },
-      { eventId: "empty", aiPickShortlisted: true, dataScore: 3 },
-      { eventId: "waiting", aiPickShortlisted: true, dataScore: null },
-      { eventId: "waiting", aiPickShortlisted: true },
-      { eventId: "lone", aiPickShortlisted: true, dataScore: 9 },
+      { eventId: "thin", dataScore: 4 },
+      { eventId: "empty", dataScore: 3 },
+      { eventId: "waiting", dataScore: null },
+      { eventId: "ready", dataScore: 9 },
     ];
-    expect(eventsReadyForVote(rows)).toEqual(["thin"]);
+    expect(eventsReadyForVote(rows)).toEqual(["ready", "thin"]);
   });
 });

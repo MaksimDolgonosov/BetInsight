@@ -167,7 +167,7 @@ export function unavailableMessage(locale: Locale): string {
 }
 
 export function pickLine(input: PickCopy): string {
-  return `${escapeHtml(selectionLabel(input))} · ${formatPrice(input.locale, input.price)}`;
+  return escapeHtml(selectionLabel(input));
 }
 
 export function kickoffLabel(iso: string, locale: Locale): string {
@@ -232,13 +232,6 @@ function confidenceLabel(locale: Locale, confidence: string) {
   const labels = text(locale).levels;
   if (confidence === "high" || confidence === "medium" || confidence === "low") return labels[confidence];
   return confidence;
-}
-
-function formatPrice(locale: Locale, price: number) {
-  return new Intl.NumberFormat(locale === "ru" ? "ru-RU" : "en-GB", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(price);
 }
 
 function formatPoint(point: number) {

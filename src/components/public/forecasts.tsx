@@ -70,7 +70,7 @@ export async function Forecasts({
               <p className="text-[14px] text-[var(--bi-text-3)]">{t("upcomingHint")}</p>
             </div>
             <div className="overflow-hidden rounded-[20px] border border-[var(--bi-border)] bg-[var(--bi-surface)]">
-              <Header labels={[t("colStart"), t("colMatch"), t("colPick"), t("colPrice"), home("colConfidence")]} />
+              <Header labels={[t("colStart"), t("colMatch"), t("colPick"), home("colConfidence")]} />
               {upcoming.length === 0 ? <p className="px-6 py-5 text-[14px] text-[var(--bi-text-3)]">{t("emptyUpcoming")}</p> : upcoming.map((pick) => (
                 <Link key={pick.id} href={`/events/${pick.eventId}`} className="flex flex-col gap-3 border-t border-[var(--bi-border)] px-6 py-[18px] lg:flex-row lg:items-center lg:gap-4">
                   <div className="flex w-full flex-col gap-1 lg:w-[130px]">
@@ -79,7 +79,6 @@ export async function Forecasts({
                   </div>
                   <Match pick={pick} />
                   <Pick pick={pick} home={home} selections={selections} />
-                  <Price pick={pick} format={format} />
                   <span className={`inline-flex w-fit rounded-full px-2 py-1 text-[12px] font-semibold ${confidenceClass(pick.confidence)}`}>
                     {pick.confidence ? label(confidence, pick.confidence) : "—"}
                   </span>
@@ -151,15 +150,6 @@ function Pick({
     <div className="flex w-full items-center gap-2.5 lg:w-[180px]">
       <span className="rounded-md bg-[var(--bi-surface-2)] px-2 py-1 font-stat text-[13px] font-semibold">{pickCode(pick, home)}</span>
       <span className="truncate text-[13px] text-[var(--bi-text-2)]">{pickName(pick, selections)}</span>
-    </div>
-  );
-}
-
-function Price({ pick, format }: { pick: PublicPick; format: Awaited<ReturnType<typeof getFormatter>> }) {
-  return (
-    <div className="flex w-[140px] flex-col gap-1">
-      <span className="text-[17px] font-semibold">{format.number(pick.price, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-      <span className="text-[11px] text-[var(--bi-text-3)]">{pick.bookmaker}</span>
     </div>
   );
 }
