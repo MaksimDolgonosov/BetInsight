@@ -3,9 +3,13 @@ import { budgetSnapshot, canSpend, startOfUtcDay, startOfUtcMonth } from "@/serv
 import { getAdminStore } from "@/server/admin/store";
 import type { TestStreamEvent, TestTrack } from "@/server/admin/test-events";
 import { evaluateQuotes } from "@/server/domain/odds/evaluate";
-import { decideConsensus, marketFavoriteKey, outcomeKey, selectAiPickShortlist, type ModelVoteInput } from "@/server/domain/predictions/ai-pick";
+import { decideConsensus, marketFavoriteKey, outcomeKey, type ModelVoteInput } from "@/server/domain/predictions/ai-pick";
+import { shortlistPricesReady, voteShortlist } from "@/server/domain/predictions/vote-shortlist";
+import { gateByDataScore } from "@/server/domain/selection";
 import type { Market, SportGroup } from "@/server/domain/settings";
 import { fetchLeagueOdds, oddsApiMode } from "@/server/integrations/odds-api/client";
+import { enabledLeagues, listRivalries, listSelectionEvents, listTeamMeta } from "@/server/jobs/persist";
+import { reviewSelection } from "@/server/jobs/selection";
 import { listActiveTennisLeagues } from "@/server/integrations/odds-api/tennis";
 import type { OddsEvent } from "@/server/integrations/odds-api/schema";
 import { generateResearch } from "@/server/integrations/openrouter/research";
@@ -31,17 +35,6 @@ export async function startTestRun(input: {
   const mocked = oddsApiMode() === "mock";
   const estimatedCost = mocked ? 0 : input.markets.length;
   const now = new Date();
-  const usage = await store.listApiUsageSince(startOfUtcMonth(now));
-  const snapshot = budgetSnapshot({
-    monthlyLimit: settings.monthlyCreditLimit,
-    reserveCredits: settings.reserveCredits,
-    used: usage.reduce((sum, row) => sum + row.cost, 0),
-    apiRemaining: await store.latestRemaining(),
-    now,
-  });
-  const budget = canSpend(snapshot, estimatedCost, "other");
-  if (!budget.ok) return { error: budget.reason, status: 409 };
-  if (!mocked && !process.env.ODDS_API_KEY) return { error: "missing_odds_key", status: 400 };
   if (process.env.VERCEL_ENV === "production" && usesFreeModel(settings, input.tracks)) {
     return { error: "free_model", status: 400 };
   }
@@ -64,6 +57,72 @@ export async function startTestRun(input: {
       };
 
       try {
+        const leagueKeys = new Set((await enabledLeagues()).map((item) => item.key));
+        const review = reviewSelection({
+          now,
+          events: (await listSelectionEvents(now, settings.selection.windowMaxHours)).filter((event) => leagueKeys.has(event.sportKey)),
+          teamMeta: await listTeamMeta(),
+          rivalries: await listRivalries(),
+          window: {
+            minHours: settings.selection.windowMinHours,
+            maxHours: settings.selection.windowMaxHours,
+          },
+          dailyLimit: settings.aiPick.dailyLimit,
+          quotas: settings.selection.quotas,
+        });
+        const selectedIds = new Set(review.selected.map((event) => event.eventId));
+        const leagueSelected = review.selected.filter((event) => event.sportKey === league.key);
+        const target = leagueSelected[0] ?? null;
+        send({
+          type: "selection",
+          windowMinHours: settings.selection.windowMinHours,
+          windowMaxHours: settings.selection.windowMaxHours,
+          rows: [...review.ranked]
+            .sort((left, right) => right.finalScore - left.finalScore || left.commenceTime.getTime() - right.commenceTime.getTime())
+            .map((event) => ({
+              eventId: event.eventId,
+              sportKey: event.sportKey,
+              home: event.home,
+              away: event.away,
+              commenceTime: event.commenceTime.toISOString(),
+              significanceScore: event.significanceScore,
+              formBonus: event.formBonus,
+              finalScore: event.finalScore,
+              formSource: event.formSource,
+              selected: selectedIds.has(event.eventId),
+              tested: event.eventId === target?.eventId,
+            })),
+        });
+        if (!target) {
+          send({ type: "note", code: "not_selected" });
+          send({ type: "done" });
+          return;
+        }
+        if (leagueSelected.length > AI_PICK_EVENT_CAP) send({ type: "note", code: "ai_pick_cap" });
+
+        const usage = await store.listApiUsageSince(startOfUtcMonth(now));
+        const budget = canSpend(
+          budgetSnapshot({
+            monthlyLimit: settings.monthlyCreditLimit,
+            reserveCredits: settings.reserveCredits,
+            used: usage.reduce((sum, row) => sum + row.cost, 0),
+            apiRemaining: await store.latestRemaining(),
+            now,
+          }),
+          estimatedCost,
+          "other",
+        );
+        if (!budget.ok) {
+          send({ type: "error", code: budget.reason });
+          send({ type: "done" });
+          return;
+        }
+        if (!mocked && !process.env.ODDS_API_KEY) {
+          send({ type: "error", code: "missing_odds_key" });
+          send({ type: "done" });
+          return;
+        }
+
         const result = await fetchLeagueOdds({
           sportKey: league.key,
           region: settings.region,
@@ -105,27 +164,32 @@ export async function startTestRun(input: {
         }
 
         const thresholds = settings.thresholds[league.group];
-        const evaluated = result.events.flatMap((event) =>
-          evaluateQuotes(event.quotes, thresholds).map((row) => ({
-            ...row,
-            eventId: event.id,
-            home: event.home,
-            away: event.away,
-            commenceTime: event.commenceTime,
+        const quoted = result.events.find((event) => event.id === target.eventId);
+        const evaluated = quoted
+          ? evaluateQuotes(quoted.quotes, thresholds).map((row) => ({
+              ...row,
+              eventId: quoted.id,
+              home: quoted.home,
+              away: quoted.away,
+              commenceTime: quoted.commenceTime,
+            }))
+          : [];
+        const shortlist = voteShortlist({
+          sportGroup: league.group,
+          outcomes: evaluated.map((row) => ({
+            market: row.market,
+            selection: row.selection,
+            point: row.point,
+            consensusProb: row.consensusProb,
+            bestPrice: row.bestPrice,
+            bestBookmaker: row.bestBookmaker,
+            ev: row.ev,
           })),
-        );
-        const shortlist = selectAiPickShortlist(evaluated, {
-          oddsMin: settings.aiPick.oddsMin,
-          oddsMax: settings.aiPick.oddsMax,
-          minEv: settings.aiPick.minEv,
-          minBookmakers: thresholds.minBookmakers,
-          outcomesPerEvent: 3,
-          eventLimit: settings.aiPick.shortlistSize,
         });
-        const shortlisted = new Set(shortlist.map((row) => `${row.eventId}|${outcomeKey(row)}`));
+        const shortlisted = new Set(shortlist.map((row) => outcomeKey(row)));
         const modelRows = evaluated.map((row) => ({
           ...row,
-          aiPickShortlisted: shortlisted.has(`${row.eventId}|${outcomeKey(row)}`),
+          aiPickShortlisted: shortlisted.has(outcomeKey(row)),
         }));
         send({ type: "model", rows: modelRows });
         await store.recordModelEvaluations(
@@ -176,28 +240,33 @@ export async function startTestRun(input: {
             if (spent >= settings.aiPick.monthlyBudgetUsd) {
               send({ type: "note", code: "ai_pick_budget" });
             } else {
-              const eventIds: string[] = [];
-              for (const row of shortlist) {
-                if (!eventIds.includes(row.eventId)) eventIds.push(row.eventId);
-              }
-              if (eventIds.length === 0) send({ type: "note", code: "no_shortlist" });
-              if (eventIds.length > AI_PICK_EVENT_CAP) send({ type: "note", code: "ai_pick_cap" });
-
-              for (const eventId of eventIds.slice(0, AI_PICK_EVENT_CAP)) {
-                const event = result.events.find((item) => item.id === eventId);
-                if (!event) continue;
-                const outcomes = shortlist.filter((row) => row.eventId === eventId);
-                const researchModel = settings.aiPick.researchModel || settings.aiPick.models[0];
-                const researchSearch = allowSearch();
-                const research = await generateResearch({
-                  model: researchModel,
-                  webSearch: researchSearch,
-                  payload: {
-                    sportGroup: league.group,
-                    event: { id: event.id, home: event.home, away: event.away, commenceTime: event.commenceTime },
-                    shortlist: outcomes,
-                  },
-                });
+              const event = {
+                id: target.eventId,
+                home: target.home,
+                away: target.away,
+                commenceTime: target.commenceTime.toISOString(),
+              };
+              const researchModel = settings.aiPick.researchModel || settings.aiPick.models[0];
+              const researchSearch = allowSearch();
+              const research = await generateResearch({
+                model: researchModel,
+                webSearch: researchSearch,
+                payload: {
+                  sportGroup: league.group,
+                  event,
+                },
+              });
+                const report = research.report;
+                const score = report
+                  ? gateByDataScore({
+                      dataScore: report.dataScore,
+                      modelDiscardReason: report.discardReason,
+                      thresholds: {
+                        voteMin: settings.selection.dataScoreThreshold,
+                        lowConfidenceMin: settings.selection.dataScoreLowConf,
+                      },
+                    })
+                  : null;
                 await store.recordAiRequest({
                   eventId: event.id,
                   model: research.model,
@@ -206,8 +275,8 @@ export async function startTestRun(input: {
                   tokensOut: research.tokensOut,
                   costUsd: research.costUsd,
                   latencyMs: research.latencyMs,
-                  rawResponse: { content: research.text },
-                  error: research.error,
+                  rawResponse: { content: report?.summary ?? research.text, report },
+                  error: report ? null : research.error,
                   webSearch: research.webSearch,
                   sources: research.sources,
                   purpose: "research",
@@ -224,11 +293,23 @@ export async function startTestRun(input: {
                   tokensOut: research.tokensOut,
                   costUsd: research.costUsd,
                   latencyMs: research.latencyMs,
-                  text: research.text,
+                  text: report?.summary ?? research.text,
                   sources: research.sources,
-                  error: research.error,
+                  error: report ? null : research.error ?? "invalid_research",
                   webSearch: research.webSearch,
+                  dataScore: report?.dataScore ?? null,
+                  action: score?.action ?? null,
                 });
+                if (!report || !score || score.action === "discard") {
+                  if (score?.action === "discard") send({ type: "note", code: "data_score_discard" });
+                  send({ type: "done" });
+                  return;
+                }
+                if (!shortlistPricesReady(shortlist)) {
+                  send({ type: "note", code: shortlist.length < 2 ? "no_shortlist" : "missing_price" });
+                  send({ type: "done" });
+                  return;
+                }
 
                 const votes: ModelVoteInput[] = [];
                 const voteIds: string[] = [];
@@ -236,12 +317,19 @@ export async function startTestRun(input: {
                   const output = await generateVote({
                     model,
                     webSearch: false,
-                    allowed: outcomes,
+                    allowed: shortlist,
                     payload: {
                       sportGroup: league.group,
                       event: { id: event.id, home: event.home, away: event.away, commenceTime: event.commenceTime },
-                      shortlist: outcomes,
-                      research: research.text || null,
+                      shortlist: shortlist.map((pick) => ({
+                        market: pick.market,
+                        selection: pick.selection,
+                        point: pick.point,
+                        consensusProb: pick.consensusProb,
+                        bestPrice: pick.bestPrice,
+                      })),
+                      research: report.summary,
+                      lowConfidence: score.lowConfidence,
                     },
                   });
                   const requestId = await store.recordAiRequest({
@@ -304,7 +392,7 @@ export async function startTestRun(input: {
                   votes,
                   modelCount: settings.aiPick.models.length,
                   mode: settings.aiPick.consensusMode,
-                  prices: outcomes.map((row) => ({ key: outcomeKey(row), price: row.bestPrice })),
+                  prices: shortlist.flatMap((row) => (row.bestPrice != null && row.bestPrice > 1 ? [{ key: outcomeKey(row), price: row.bestPrice }] : [])),
                   tolerance: settings.aiPick.probabilityTolerance,
                   marketFavoriteKey: favorite,
                 });
@@ -323,7 +411,7 @@ export async function startTestRun(input: {
                   selection: decision.pick?.selection ?? null,
                   point: decision.pick?.point ?? null,
                   bestPrice: decision.bestPrice,
-                  confidence: decision.confidence,
+                  confidence: score.lowConfidence ? "low" : decision.confidence,
                   reasoningRu: decision.reasoning?.ru ?? null,
                   reasoningEn: decision.reasoning?.en ?? null,
                   matchesMarketFavorite: decision.matchesMarketFavorite,
@@ -335,8 +423,8 @@ export async function startTestRun(input: {
                   home: event.home,
                   away: event.away,
                   ...decision,
+                  lowConfidence: score.lowConfidence,
                 });
-              }
             }
           }
         }

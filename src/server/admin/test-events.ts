@@ -26,6 +26,20 @@ export type ModelTableRow = OutcomeEvaluation & {
   aiPickShortlisted: boolean;
 };
 
+export type SelectionTableRow = {
+  eventId: string;
+  sportKey: string;
+  home: string;
+  away: string;
+  commenceTime: string;
+  significanceScore: number;
+  formBonus: number;
+  finalScore: number;
+  formSource: "calculated" | "insufficient_data";
+  selected: boolean;
+  tested: boolean;
+};
+
 export type TestStreamEvent =
   | {
       type: "odds";
@@ -38,6 +52,12 @@ export type TestStreamEvent =
       raw: unknown;
       table: OddsTableRow[];
       valid: boolean;
+    }
+  | {
+      type: "selection";
+      windowMinHours: number;
+      windowMaxHours: number;
+      rows: SelectionTableRow[];
     }
   | { type: "model"; rows: ModelTableRow[] }
   | {
@@ -73,6 +93,8 @@ export type TestStreamEvent =
       sources: string[];
       error: string | null;
       webSearch: boolean;
+      dataScore: number | null;
+      action: "vote" | "low_confidence" | "discard" | null;
     }
   | {
       type: "vote";
@@ -94,6 +116,7 @@ export type TestStreamEvent =
       eventId: string;
       home: string;
       away: string;
+      lowConfidence: boolean;
     } & ConsensusDecision)
   | {
       type: "note";
@@ -105,6 +128,9 @@ export type TestStreamEvent =
         | "ai_pick_budget"
         | "ai_pick_cap"
         | "no_shortlist"
+        | "not_selected"
+        | "data_score_discard"
+        | "missing_price"
         | "web_search_limited";
     }
   | { type: "error"; code: string }

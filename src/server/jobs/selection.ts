@@ -1,4 +1,4 @@
-import { inferRounds, isRoundStage, selectDay, type DailyQuotas, type RivalryPair, type RoundStage, type ScoredEvent, type TeamMeta } from "@/server/domain/selection";
+import { inferRounds, isRoundStage, rankDay, type DailyQuotas, type RivalryPair, type RoundStage, type ScoredEvent, type TeamMeta } from "@/server/domain/selection";
 import { teamForm, type FinishedMatch } from "@/server/domain/selection/history";
 
 export type SelectionEvent = {
@@ -32,6 +32,18 @@ export function planSelection(input: {
   dailyLimit: number;
   quotas: DailyQuotas;
 }): ScoredEvent[] {
+  return reviewSelection(input).selected;
+}
+
+export function reviewSelection(input: {
+  now: Date;
+  events: readonly SelectionEvent[];
+  teamMeta?: readonly TeamMeta[];
+  rivalries?: readonly RivalryPair[];
+  window: { minHours: number; maxHours: number };
+  dailyLimit: number;
+  quotas: DailyQuotas;
+}): { ranked: ScoredEvent[]; selected: ScoredEvent[] } {
   const finished = finishedMatches(input.events);
   const scheduled = input.events.filter((event) => event.status === "scheduled");
   const rounds = inferRounds(scheduled.map((event) => ({
@@ -55,7 +67,7 @@ export function planSelection(input: {
       awayForm: teamForm(event.away, event.sportKey, finished, event.commenceTime),
     };
   });
-  return selectDay({
+  return rankDay({
     now: input.now,
     events: schedule,
     teamMeta: input.teamMeta,

@@ -40,6 +40,7 @@ export function TestRunner({
   const [selected, setSelected] = useState<Market[]>(markets);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selection, setSelection] = useState<Extract<TestStreamEvent, { type: "selection" }> | null>(null);
   const [odds, setOdds] = useState<Extract<TestStreamEvent, { type: "odds" }> | null>(null);
   const [model, setModel] = useState<Extract<TestStreamEvent, { type: "model" }> | null>(null);
   const [predictions, setPredictions] = useState<Extract<TestStreamEvent, { type: "prediction" }>[]>([]);
@@ -68,6 +69,7 @@ export function TestRunner({
   async function run() {
     setRunning(true);
     setError(null);
+    setSelection(null);
     setOdds(null);
     setModel(null);
     setPredictions([]);
@@ -100,6 +102,7 @@ export function TestRunner({
         for (const line of lines) {
           if (!line.trim()) continue;
           const event = JSON.parse(line) as TestStreamEvent;
+          if (event.type === "selection") setSelection(event);
           if (event.type === "odds") setOdds(event);
           if (event.type === "model") setModel(event);
           if (event.type === "prediction") setPredictions((current) => [...current, event]);
@@ -163,10 +166,54 @@ export function TestRunner({
         {mocked ? <p className="mt-3 text-sm text-muted-foreground">{t("mocked")}</p> : null}
         {blocked ? <p className="mt-3 text-sm text-destructive">{te("reserve")}</p> : null}
         {error ? <p className="mt-3 text-sm text-destructive">{error}</p> : null}
-        <Button className="mt-4" type="button" disabled={running || blocked || !sportKey || selected.length === 0 || !aiPickEnabled} onClick={run}>
+        <Button className="mt-4" type="button" disabled={running || !sportKey || selected.length === 0 || !aiPickEnabled} onClick={run}>
           {running ? t("running") : t("run")}
         </Button>
       </section>
+
+      {selection ? (
+        <section className="rounded-xl border bg-card p-4 md:p-6">
+          <h2 className="text-base font-semibold">{t("selectionTitle")}</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {t("windowHours")}: {selection.windowMinHours}–{selection.windowMaxHours}
+          </p>
+          {selection.rows.length === 0 ? <p className="mt-3 text-sm text-muted-foreground">{t("not_selected")}</p> : null}
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[860px] text-left text-sm">
+              <thead className="text-xs text-muted-foreground">
+                <tr className="border-b">
+                  <th className="px-2 py-2 font-medium">{t("event")}</th>
+                  <th className="px-2 py-2 font-medium">{t("league")}</th>
+                  <th className="px-2 py-2 font-medium">{t("start")}</th>
+                  <th className="px-2 py-2 font-medium">{t("significance")}</th>
+                  <th className="px-2 py-2 font-medium">{t("formBonus")}</th>
+                  <th className="px-2 py-2 font-medium">{t("finalScore")}</th>
+                  <th className="px-2 py-2 font-medium">{t("inSlate")}</th>
+                  <th className="px-2 py-2 font-medium">{t("tested")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {selection.rows.map((row) => (
+                  <tr key={row.eventId} className="border-b last:border-b-0">
+                    <td className="px-2 py-3">{row.home} — {row.away}</td>
+                    <td className="px-2 py-3">{row.sportKey}</td>
+                    <td className="px-2 py-3 whitespace-nowrap">{dateFormat.format(new Date(row.commenceTime))}</td>
+                    <td className="px-2 py-3">{row.significanceScore}</td>
+                    <td className="px-2 py-3">
+                      {row.formBonus}
+                      {" · "}
+                      {row.formSource === "calculated" ? t("formCalculated") : t("formInsufficient")}
+                    </td>
+                    <td className="px-2 py-3">{row.finalScore}</td>
+                    <td className="px-2 py-3">{row.selected ? t("yes") : t("no")}</td>
+                    <td className="px-2 py-3">{row.tested ? t("yes") : t("no")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
 
       {odds ? (
         <section className="flex flex-col gap-4 rounded-xl border bg-card p-4 md:p-6">
@@ -226,9 +273,6 @@ export function TestRunner({
                   <th className="px-2 py-2 font-medium">{t("pick")}</th>
                   <th className="px-2 py-2 font-medium">{t("consensus")}</th>
                   <th className="px-2 py-2 font-medium">{t("bestPrice")}</th>
-                  <th className="px-2 py-2 font-medium">EV</th>
-                  <th className="px-2 py-2 font-medium">{t("candidate")}</th>
-                  <th className="px-2 py-2 font-medium">{t("nearMiss")}</th>
                   <th className="px-2 py-2 font-medium">{t("shortlist")}</th>
                 </tr>
               </thead>
@@ -244,9 +288,6 @@ export function TestRunner({
                     <td className="px-2 py-3">
                       {numberFormat.format(row.bestPrice)} · {row.bestBookmaker}
                     </td>
-                    <td className="px-2 py-3">{percentFormat.format(row.ev)}</td>
-                    <td className="px-2 py-3">{row.candidate ? t("yes") : t("no")}</td>
-                    <td className="px-2 py-3">{row.nearMiss ? t("yes") : t("no")}</td>
                     <td className="px-2 py-3">{row.aiPickShortlisted ? t("yes") : t("no")}</td>
                   </tr>
                 ))}
@@ -309,6 +350,7 @@ export function TestRunner({
             <Info label={t("tokens")} value={`${item.tokensIn ?? "—"} / ${item.tokensOut ?? "—"}`} />
             <Info label={t("cost")} value={item.costUsd == null ? "—" : usdFormat.format(item.costUsd)} />
             <Info label={t("webSearchUsed")} value={item.webSearch ? t("yes") : t("no")} />
+            <Info label={t("dataScore")} value={item.dataScore == null ? "—" : String(item.dataScore)} />
           </dl>
           {item.error ? <p className="text-sm text-destructive">{item.error}</p> : null}
           {item.text ? <p className="text-sm text-muted-foreground whitespace-pre-wrap">{item.text}</p> : null}
@@ -374,7 +416,7 @@ export function TestRunner({
               <p className="text-sm">
                 {marketLabels(item.pick.market)} · {selections(item.pick.selection)}
                 {item.pick.point != null ? ` ${item.pick.point}` : ""}
-                {item.confidence ? ` · ${confidence(item.confidence)}` : ""}
+                {item.lowConfidence ? ` · ${confidence("low")}` : item.confidence ? ` · ${confidence(item.confidence)}` : ""}
               </p>
             ) : null}
             {item.matchesMarketFavorite ? <p className="text-sm text-muted-foreground">{t("matchesFavorite")}</p> : null}

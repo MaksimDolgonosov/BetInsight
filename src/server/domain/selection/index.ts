@@ -19,7 +19,7 @@ export { parseResearchReport, type ResearchReport } from "./research-report";
 export { assessForm, finalScore, formScore, type FormAssessment, type FormResult, type FormSource } from "./form";
 export { teamForm, type FinishedMatch } from "./history";
 export { applyDailyQuotas, isTennisSport, type DailyQuotas, type QuotaCandidate } from "./quotas";
-export { scoreEvent, selectDay, type RivalryPair, type ScheduleEvent, type ScoredEvent, type TeamMeta } from "./select";
+export { rankDay, scoreEvent, selectDay, type RivalryPair, type ScheduleEvent, type ScoredEvent, type TeamMeta } from "./select";
 export { inferLeagueClass, isDerby, significanceScore, type SignificanceInput, type TeamStanding } from "./significance";
 export { inferRounds, ROUND_BOARD_HOURS, type RoundFixture, type RoundHint } from "./round";
 export { inSelectionWindow } from "./window";

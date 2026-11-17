@@ -95,15 +95,29 @@ export function selectDay(input: {
   dailyLimit?: number;
   quotas?: DailyQuotas;
 }): ScoredEvent[] {
+  return rankDay(input).selected;
+}
+
+export function rankDay(input: {
+  now: Date;
+  events: readonly ScheduleEvent[];
+  teamMeta?: readonly TeamMeta[];
+  rivalries?: readonly RivalryPair[];
+  window?: { minHours: number; maxHours: number };
+  dailyLimit?: number;
+  quotas?: DailyQuotas;
+}): { ranked: ScoredEvent[]; selected: ScoredEvent[] } {
   const window = input.window ?? DEFAULT_SELECTION_WINDOW;
   const teamMeta = input.teamMeta ?? [];
   const rivalries = input.rivalries ?? [];
-  const inWindow = input.events.filter((event) => inSelectionWindow(event.commenceTime, input.now, window));
-  const scored = inWindow.map((event) => scoreEvent(event, teamMeta, rivalries));
-  return applyDailyQuotas(scored, {
+  const ranked = input.events
+    .filter((event) => inSelectionWindow(event.commenceTime, input.now, window))
+    .map((event) => scoreEvent(event, teamMeta, rivalries));
+  const selected = applyDailyQuotas(ranked, {
     dailyLimit: input.dailyLimit ?? DEFAULT_DAILY_LIMIT,
     quotas: input.quotas ?? DEFAULT_DAILY_QUOTAS,
   });
+  return { ranked, selected };
 }
 
 function standing(teamMeta: readonly TeamMeta[], teamName: string, leagueKey: string): TeamStanding | null {
