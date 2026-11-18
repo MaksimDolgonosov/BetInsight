@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, isNotNull } from "drizzle-orm";
 import { getDb } from "@/server/db";
-import { aiConsensus, aiRequests, aiVotes, apiUsage, appSettings, auditLog, events, jobRuns, modelEvaluations, predictions, rivalryPairs, sports, teamMeta, type StoredDailyQuotas } from "@/server/db/schema";
+import { aiConsensus, aiRequests, aiVotes, apiUsage, appSettings, auditLog, events, jobRuns, modelEvaluations, predictions, sports } from "@/server/db/schema";
 import { startOfUtcDay } from "@/server/budget/budget";
 import {
   aiPickFromEnv,
@@ -14,12 +14,11 @@ import {
   type Market,
   type SportThresholds,
 } from "@/server/domain/settings";
-import { DEFAULT_DAILY_QUOTAS, type DailyQuotas } from "@/server/domain/selection";
+import { DEFAULT_LEAGUE_QUOTA, DEFAULT_PROB_RANGE, DEFAULT_VOTE_WINDOW } from "@/server/domain/selection";
 import { countEpoch } from "@/server/domain/stats/epoch";
 import { decideSettlement } from "@/server/domain/settlement/profit";
 import { groupModelSpend } from "@/server/admin/llm-spend";
 import { testRunAllowance } from "@/server/admin/rate-limit";
-import type { RivalryInput, TeamMetaInput } from "@/server/domain/selection/reference";
 import {
   TEST_RUN_ENDPOINT,
   type AdminStore,
@@ -110,74 +109,6 @@ export class DrizzleAdminStore implements AdminStore {
         entity: "app_settings",
         payload: settings,
       });
-    });
-  }
-
-  listTeamMeta() {
-    return this.withDb(async (db) => {
-      const rows = await db.select().from(teamMeta);
-      return rows
-        .map((row) => ({
-          teamName: row.teamName,
-          sportKey: row.sportKey,
-          leagueKey: row.leagueKey,
-          tableRank: row.tableRank,
-          isRelegation: row.isRelegation,
-        }))
-        .sort((left, right) => left.leagueKey.localeCompare(right.leagueKey) || (left.tableRank ?? 99) - (right.tableRank ?? 99) || left.teamName.localeCompare(right.teamName));
-    });
-  }
-
-  saveTeamMeta(row: TeamMetaInput, actor: string) {
-    return this.withDb(async (db) => {
-      await db
-        .insert(teamMeta)
-        .values({ ...row, updatedAt: new Date() })
-        .onConflictDoUpdate({
-          target: [teamMeta.teamName, teamMeta.leagueKey],
-          set: { sportKey: row.sportKey, tableRank: row.tableRank, isRelegation: row.isRelegation, updatedAt: new Date() },
-        });
-      await db.insert(auditLog).values({ actor, action: "team_meta.save", entity: row.leagueKey, payload: row });
-    });
-  }
-
-  deleteTeamMeta(key: { teamName: string; leagueKey: string }, actor: string) {
-    return this.withDb(async (db) => {
-      await db.delete(teamMeta).where(and(eq(teamMeta.teamName, key.teamName), eq(teamMeta.leagueKey, key.leagueKey)));
-      await db.insert(auditLog).values({ actor, action: "team_meta.delete", entity: key.leagueKey, payload: key });
-    });
-  }
-
-  listRivalries() {
-    return this.withDb(async (db) => {
-      const rows = await db.select().from(rivalryPairs);
-      return rows
-        .map((row) => ({ sportKey: row.sportKey, teamA: row.teamA, teamB: row.teamB, label: row.label }))
-        .sort((left, right) => left.sportKey.localeCompare(right.sportKey) || left.teamA.localeCompare(right.teamA) || left.teamB.localeCompare(right.teamB));
-    });
-  }
-
-  saveRivalry(row: RivalryInput, actor: string) {
-    return this.withDb(async (db) => {
-      await db
-        .insert(rivalryPairs)
-        .values(row)
-        .onConflictDoUpdate({
-          target: [rivalryPairs.sportKey, rivalryPairs.teamA, rivalryPairs.teamB],
-          set: { label: row.label },
-        });
-      await db.insert(auditLog).values({ actor, action: "rivalry.save", entity: row.sportKey, payload: row });
-    });
-  }
-
-  deleteRivalry(key: { sportKey: string; teamA: string; teamB: string }, actor: string) {
-    return this.withDb(async (db) => {
-      await db.delete(rivalryPairs).where(and(
-        eq(rivalryPairs.sportKey, key.sportKey),
-        eq(rivalryPairs.teamA, key.teamA),
-        eq(rivalryPairs.teamB, key.teamB),
-      ));
-      await db.insert(auditLog).values({ actor, action: "rivalry.delete", entity: key.sportKey, payload: key });
     });
   }
 
@@ -571,7 +502,11 @@ function toSettingsRow(settings: AdminSettings) {
     aiPickMonthlyBudgetUsd: settings.aiPick.monthlyBudgetUsd,
     selectionWindowMinHours: settings.selection.windowMinHours,
     selectionWindowMaxHours: settings.selection.windowMaxHours,
-    dailyQuotas: storedQuotas(settings.selection.quotas),
+    probMin: settings.selection.probMin,
+    probMax: settings.selection.probMax,
+    leagueQuota: settings.selection.leagueQuota,
+    voteWindowStart: settings.selection.voteWindowStart,
+    voteWindowEnd: settings.selection.voteWindowEnd,
     dataScoreThreshold: settings.selection.dataScoreThreshold,
     dataScoreLowConf: settings.selection.dataScoreLowConf,
     aiPickConfigured: true,
@@ -622,7 +557,11 @@ function toSettings(
     selection: {
       windowMinHours: row.selectionWindowMinHours,
       windowMaxHours: row.selectionWindowMaxHours,
-      quotas: readQuotas(row.dailyQuotas),
+      probMin: row.probMin ?? DEFAULT_PROB_RANGE.min,
+      probMax: row.probMax ?? DEFAULT_PROB_RANGE.max,
+      leagueQuota: row.leagueQuota ?? DEFAULT_LEAGUE_QUOTA,
+      voteWindowStart: row.voteWindowStart ?? DEFAULT_VOTE_WINDOW.startHour,
+      voteWindowEnd: row.voteWindowEnd ?? DEFAULT_VOTE_WINDOW.endHour,
       dataScoreThreshold: row.dataScoreThreshold,
       dataScoreLowConf: row.dataScoreLowConf,
     },
@@ -630,17 +569,6 @@ function toSettings(
     reserveCredits: row.reserveCredits,
     testRunsPerDay: row.testRunsPerDay,
   });
-}
-
-function storedQuotas(quotas: DailyQuotas): StoredDailyQuotas {
-  return { per_league: quotas.perLeague, tennis: quotas.tennis };
-}
-
-function readQuotas(value: StoredDailyQuotas | null | undefined): DailyQuotas {
-  return {
-    perLeague: value?.per_league ?? DEFAULT_DAILY_QUOTAS.perLeague,
-    tennis: value?.tennis ?? DEFAULT_DAILY_QUOTAS.tennis,
-  };
 }
 
 function mergeThresholds(value: SportThresholds | undefined, fallback: SportThresholds): SportThresholds {
@@ -707,6 +635,8 @@ function toEvaluation(row: typeof modelEvaluations.$inferSelect): ModelEvaluatio
     isCandidate: row.isCandidate,
     nearMiss: row.nearMiss,
     aiPickShortlisted: row.aiPickShortlisted,
+    asymmetryScore: row.asymmetryScore,
+    asymmetryMarket: row.asymmetryMarket,
     significanceScore: row.significanceScore,
     formHome: row.formHome,
     formAway: row.formAway,
@@ -775,7 +705,7 @@ function threeModels(value: string[] | null, fallback: [string, string, string])
 
 function asPurpose(value: string): AiPurpose {
   if (value === "vote" || value === "research" || value === "value_check") return value;
-  return "value_check";
+  return "research";
 }
 
 function toJobRun(row: typeof jobRuns.$inferSelect): JobRunRecord {

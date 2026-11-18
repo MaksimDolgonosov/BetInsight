@@ -1,5 +1,4 @@
 import type { ModelSpend } from "@/server/admin/llm-spend";
-import type { RivalryInput, TeamMetaInput } from "@/server/domain/selection/reference";
 import type { AdminSettings } from "@/server/domain/settings";
 import type { SettlementError, SettlementStatus } from "@/server/domain/settlement/profit";
 
@@ -51,6 +50,8 @@ export type ModelEvaluationRecord = {
   isCandidate: boolean;
   nearMiss: boolean;
   aiPickShortlisted: boolean;
+  asymmetryScore?: number | null;
+  asymmetryMarket?: string | null;
   significanceScore?: number | null;
   formHome?: number | null;
   formAway?: number | null;
@@ -151,12 +152,6 @@ export interface AdminStore {
   getStatsEpoch(): Promise<StatsEpoch>;
   resetStatsEpoch(input: { actor: string; now: Date }): Promise<StatsEpoch>;
   saveSettings(settings: AdminSettings, actor: string): Promise<void>;
-  listTeamMeta(): Promise<TeamMetaInput[]>;
-  saveTeamMeta(row: TeamMetaInput, actor: string): Promise<void>;
-  deleteTeamMeta(key: { teamName: string; leagueKey: string }, actor: string): Promise<void>;
-  listRivalries(): Promise<RivalryInput[]>;
-  saveRivalry(row: RivalryInput, actor: string): Promise<void>;
-  deleteRivalry(key: { sportKey: string; teamA: string; teamB: string }, actor: string): Promise<void>;
   listApiUsage(limit: number): Promise<ApiUsageRecord[]>;
   listApiUsageSince(since: Date): Promise<ApiUsageRecord[]>;
   listAiRequests(limit: number): Promise<AiRequestRecord[]>;

@@ -46,5 +46,11 @@ export const SIGNIFICANCE_CAP = 100;
 export const SELECTION_MARKET = "selection";
 export const DEFAULT_SELECTION_WINDOW = { minHours: 4, maxHours: 24 };
 export const DEFAULT_DAILY_LIMIT = 8;
-export const DEFAULT_DAILY_QUOTAS = { perLeague: 3, tennis: 2 };
+export const DEFAULT_PROB_RANGE = { min: 0.5, max: 0.7 };
+export const DEFAULT_LEAGUE_QUOTA = 2;
+export const DEFAULT_VOTE_LEAD_HOURS = 2;
+export const DEFAULT_VOTE_WINDOW = { startHour: 8, endHour: 20 };
 export const DEFAULT_DATA_SCORE_THRESHOLDS = { voteMin: 6, lowConfidenceMin: 4 };
+
+export type ProbRange = { min: number; max: number };
+export type VoteWindow = { startHour: number; endHour: number };

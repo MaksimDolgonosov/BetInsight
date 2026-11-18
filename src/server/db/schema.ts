@@ -6,7 +6,6 @@ import {
   jsonb,
   numeric,
   pgTable,
-  primaryKey,
   smallint,
   text,
   timestamp,
@@ -55,6 +54,11 @@ export const appSettings = pgTable("app_settings", {
   aiPickMonthlyBudgetUsd: doublePrecision("ai_pick_monthly_budget_usd").notNull().default(20),
   selectionWindowMinHours: smallint("selection_window_min_hours").notNull().default(4),
   selectionWindowMaxHours: smallint("selection_window_max_hours").notNull().default(24),
+  probMin: numeric("prob_min", { precision: 4, scale: 3, mode: "number" }).notNull().default(0.5),
+  probMax: numeric("prob_max", { precision: 4, scale: 3, mode: "number" }).notNull().default(0.7),
+  leagueQuota: smallint("league_quota").notNull().default(2),
+  voteWindowStart: smallint("vote_window_start").notNull().default(8),
+  voteWindowEnd: smallint("vote_window_end").notNull().default(20),
   dailyQuotas: jsonb("daily_quotas").$type<StoredDailyQuotas>().notNull().default({ per_league: 3, tennis: 2 }),
   dataScoreThreshold: smallint("data_score_threshold").notNull().default(6),
   dataScoreLowConf: smallint("data_score_low_conf").notNull().default(4),
@@ -123,7 +127,7 @@ export const aiRequests = pgTable(
     error: text("error"),
     webSearch: boolean("web_search").notNull().default(false),
     sources: jsonb("sources").$type<string[]>(),
-    purpose: text("purpose").notNull().default("value_check"),
+    purpose: text("purpose").notNull().default("research"),
     source: text("source").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -148,6 +152,8 @@ export const modelEvaluations = pgTable(
     nearMiss: boolean("near_miss").notNull(),
     aiPickShortlisted: boolean("ai_pick_shortlisted").notNull(),
     significanceScore: smallint("significance_score"),
+    asymmetryScore: numeric("asymmetry_score", { precision: 4, scale: 3, mode: "number" }),
+    asymmetryMarket: text("asymmetry_market"),
     formHome: numeric("form_home", { precision: 4, scale: 3, mode: "number" }),
     formAway: numeric("form_away", { precision: 4, scale: 3, mode: "number" }),
     formDelta: numeric("form_delta", { precision: 4, scale: 3, mode: "number" }),
@@ -267,30 +273,6 @@ export const tgMessages = pgTable(
     sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [uniqueIndex("tg_messages_dedupe_idx").on(table.dedupe)],
-);
-
-export const teamMeta = pgTable(
-  "team_meta",
-  {
-    teamName: text("team_name").notNull(),
-    sportKey: text("sport_key").notNull(),
-    leagueKey: text("league_key").notNull(),
-    tableRank: smallint("table_rank"),
-    isRelegation: boolean("is_relegation").notNull().default(false),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => [primaryKey({ columns: [table.teamName, table.leagueKey] })],
-);
-
-export const rivalryPairs = pgTable(
-  "rivalry_pairs",
-  {
-    sportKey: text("sport_key").notNull(),
-    teamA: text("team_a").notNull(),
-    teamB: text("team_b").notNull(),
-    label: text("label"),
-  },
-  (table) => [primaryKey({ columns: [table.sportKey, table.teamA, table.teamB] })],
 );
 
 export const auditLog = pgTable(

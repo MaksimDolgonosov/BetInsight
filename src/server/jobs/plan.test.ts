@@ -9,7 +9,7 @@ import { LEAGUE_CATALOG } from "@/server/domain/settings";
 describe("data job plan", () => {
   const now = new Date("2026-11-08T03:00:00.000Z");
 
-  it("uses the Moscow date and queues odds four hours before the first match", () => {
+  it("uses the Moscow date and requests odds at plan time for the 4–24 hour window", () => {
     expect(mskDate(now)).toBe("2026-11-08");
     const calls = planDay({
       now,
@@ -22,8 +22,25 @@ describe("data job plan", () => {
     });
 
     expect(calls.map((call) => call.purpose)).toEqual(["opening", "closing"]);
-    expect(calls[0]?.notBefore.toISOString()).toBe("2026-11-08T12:00:00.000Z");
+    expect(calls[0]?.notBefore.toISOString()).toBe(now.toISOString());
     expect(calls[1]?.notBefore.toISOString()).toBe("2026-11-08T23:00:00.000Z");
+  });
+
+  it("still requests odds for a match after midnight MSK", () => {
+    const calls = planDay({
+      now,
+      leagues: [{ key: "icehockey_nhl" }],
+      events: [{ sportKey: "icehockey_nhl", commenceTime: "2026-11-09T00:00:00.000Z", status: "scheduled" }],
+    });
+    expect(calls).toEqual([
+      {
+        job: "fetch-odds",
+        sportKey: "icehockey_nhl",
+        day: "2026-11-08",
+        purpose: "opening",
+        notBefore: now,
+      },
+    ]);
   });
 
   it("marks a started match missing when the scores feed no longer contains it", () => {

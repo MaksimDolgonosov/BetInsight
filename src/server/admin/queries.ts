@@ -7,6 +7,7 @@ import { oddsApiMode } from "@/server/integrations/odds-api/client";
 import { qstashConfigured } from "@/server/integrations/qstash/client";
 import { redisConfigured } from "@/server/integrations/redis/client";
 import { listActiveTennisLeagues } from "@/server/integrations/odds-api/tennis";
+import { loadVirtualNoConsensus } from "@/server/admin/virtual-consensus";
 import { listSavedPredictions } from "@/server/jobs/ai-store";
 
 export async function loadOverview() {
@@ -153,6 +154,7 @@ export async function loadTracks() {
     consensus,
     predictions,
     aiPickSpend: await store.aiSpendSince(startOfUtcMonth(now), ["research", "vote"]),
+    virtual: await loadVirtualNoConsensus(epoch.startedAt),
   };
 }
 

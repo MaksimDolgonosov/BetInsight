@@ -43,7 +43,6 @@ export function TestRunner({
   const [selection, setSelection] = useState<Extract<TestStreamEvent, { type: "selection" }> | null>(null);
   const [odds, setOdds] = useState<Extract<TestStreamEvent, { type: "odds" }> | null>(null);
   const [model, setModel] = useState<Extract<TestStreamEvent, { type: "model" }> | null>(null);
-  const [predictions, setPredictions] = useState<Extract<TestStreamEvent, { type: "prediction" }>[]>([]);
   const [research, setResearch] = useState<Extract<TestStreamEvent, { type: "research" }>[]>([]);
   const [votes, setVotes] = useState<Extract<TestStreamEvent, { type: "vote" }>[]>([]);
   const [consensus, setConsensus] = useState<Extract<TestStreamEvent, { type: "consensus" }>[]>([]);
@@ -72,7 +71,6 @@ export function TestRunner({
     setSelection(null);
     setOdds(null);
     setModel(null);
-    setPredictions([]);
     setResearch([]);
     setVotes([]);
     setConsensus([]);
@@ -105,7 +103,6 @@ export function TestRunner({
           if (event.type === "selection") setSelection(event);
           if (event.type === "odds") setOdds(event);
           if (event.type === "model") setModel(event);
-          if (event.type === "prediction") setPredictions((current) => [...current, event]);
           if (event.type === "research") setResearch((current) => [...current, event]);
           if (event.type === "vote") setVotes((current) => [...current, event]);
           if (event.type === "consensus") setConsensus((current) => [...current, event]);
@@ -185,9 +182,9 @@ export function TestRunner({
                   <th className="px-2 py-2 font-medium">{t("event")}</th>
                   <th className="px-2 py-2 font-medium">{t("league")}</th>
                   <th className="px-2 py-2 font-medium">{t("start")}</th>
-                  <th className="px-2 py-2 font-medium">{t("significance")}</th>
-                  <th className="px-2 py-2 font-medium">{t("formBonus")}</th>
-                  <th className="px-2 py-2 font-medium">{t("finalScore")}</th>
+                  <th className="px-2 py-2 font-medium">{t("asymmetry")}</th>
+                  <th className="px-2 py-2 font-medium">{t("market")}</th>
+                  <th className="px-2 py-2 font-medium">{t("voteTime")}</th>
                   <th className="px-2 py-2 font-medium">{t("inSlate")}</th>
                   <th className="px-2 py-2 font-medium">{t("tested")}</th>
                 </tr>
@@ -198,13 +195,9 @@ export function TestRunner({
                     <td className="px-2 py-3">{row.home} — {row.away}</td>
                     <td className="px-2 py-3">{row.sportKey}</td>
                     <td className="px-2 py-3 whitespace-nowrap">{dateFormat.format(new Date(row.commenceTime))}</td>
-                    <td className="px-2 py-3">{row.significanceScore}</td>
-                    <td className="px-2 py-3">
-                      {row.formBonus}
-                      {" · "}
-                      {row.formSource === "calculated" ? t("formCalculated") : t("formInsufficient")}
-                    </td>
-                    <td className="px-2 py-3">{row.finalScore}</td>
+                    <td className="px-2 py-3">{percentFormat.format(row.asymmetryScore)}</td>
+                    <td className="px-2 py-3">{marketLabels(row.asymmetryMarket)}</td>
+                    <td className="px-2 py-3 whitespace-nowrap">{dateFormat.format(new Date(row.voteTime))}</td>
                     <td className="px-2 py-3">{row.selected ? t("yes") : t("no")}</td>
                     <td className="px-2 py-3">{row.tested ? t("yes") : t("no")}</td>
                   </tr>
@@ -301,46 +294,6 @@ export function TestRunner({
         <p key={note} className="text-sm text-muted-foreground">{note}</p>
       ))}
 
-      {predictions.map((prediction) => {
-        const reasoning = prediction.parsed?.reasoning[locale === "ru" ? "ru" : "en"];
-        return (
-          <section key={prediction.eventId} className="flex flex-col gap-3 rounded-xl border bg-card p-4 md:p-6">
-            <h2 className="text-base font-semibold">
-              {t("valueTitle")}: {prediction.home} — {prediction.away}
-            </h2>
-            <dl className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-              <Info label={t("model")} value={prediction.model} />
-              <Info label={t("prompt")} value={prediction.promptVersion} />
-              <Info label={t("tokens")} value={`${prediction.tokensIn ?? "—"} / ${prediction.tokensOut ?? "—"}`} />
-              <Info label={t("cost")} value={prediction.costUsd == null ? "—" : usdFormat.format(prediction.costUsd)} />
-              <Info label={t("latency")} value={t("milliseconds", { count: prediction.latencyMs })} />
-              <Info label={t("webSearchUsed")} value={prediction.webSearch ? t("yes") : t("no")} />
-            </dl>
-            {prediction.validationError ? (
-              <p className="text-sm text-destructive">
-                {t("validationError")}: {prediction.validationError}
-              </p>
-            ) : null}
-            {prediction.parsed ? (
-              <div className="text-sm">
-                <p>
-                  {marketLabels(prediction.parsed.pick.market)} · {selections(prediction.parsed.pick.selection)}
-                  {prediction.parsed.pick.point != null ? ` ${prediction.parsed.pick.point}` : ""}
-                  {" · "}
-                  {percentFormat.format(prediction.parsed.ai_probability)}
-                  {" · "}
-                  {confidence(prediction.parsed.confidence)}
-                  {" · "}
-                  {prediction.parsed.skip ? t("skipped") : t("publishedPick")}
-                </p>
-                {reasoning ? <p className="mt-2 text-muted-foreground">{reasoning}</p> : null}
-              </div>
-            ) : null}
-            <JsonBlock value={prediction.raw} summary={t("rawModel")} copyLabel={t("copy")} copiedLabel={t("copied")} />
-          </section>
-        );
-      })}
-
       {research.map((item) => (
         <section key={`research-${item.eventId}`} className="flex flex-col gap-3 rounded-xl border bg-card p-4 md:p-6">
           <h2 className="text-base font-semibold">{t("researchTitle")}: {item.home} — {item.away}</h2>
@@ -351,6 +304,8 @@ export function TestRunner({
             <Info label={t("cost")} value={item.costUsd == null ? "—" : usdFormat.format(item.costUsd)} />
             <Info label={t("webSearchUsed")} value={item.webSearch ? t("yes") : t("no")} />
             <Info label={t("dataScore")} value={item.dataScore == null ? "—" : String(item.dataScore)} />
+            <Info label={t("homeForm")} value={formLine(item.homeForm)} />
+            <Info label={t("awayForm")} value={formLine(item.awayForm)} />
           </dl>
           {item.error ? <p className="text-sm text-destructive">{item.error}</p> : null}
           {item.text ? <p className="text-sm text-muted-foreground whitespace-pre-wrap">{item.text}</p> : null}
@@ -436,6 +391,10 @@ function Info({ label, value }: { label: string; value: string }) {
       <dd className="mt-1 font-medium">{value}</dd>
     </div>
   );
+}
+
+function formLine(results: readonly string[]) {
+  return results.length > 0 ? results.join(" ") : "—";
 }
 
 function errorText(te: { (key: string): string; has: (key: string) => boolean }, code: string | undefined) {

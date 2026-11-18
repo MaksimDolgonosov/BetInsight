@@ -199,11 +199,20 @@ export function SettingsForm({
           <Field label={t("windowMax")}>
             <Input name="selectionWindowMaxHours" type="number" min="0" max="168" step="1" defaultValue={settings.selection.windowMaxHours} required />
           </Field>
-          <Field label={t("perLeague")}>
-            <Input name="selectionPerLeague" type="number" min="1" max="8" step="1" defaultValue={settings.selection.quotas.perLeague} required />
+          <Field label={t("probMin")} hint={t("probHint")}>
+            <Input name="probMinPercent" type="number" min="1" max="99" step="1" defaultValue={Math.round(settings.selection.probMin * 100)} required />
           </Field>
-          <Field label={t("tennisQuota")}>
-            <Input name="selectionTennis" type="number" min="0" max="8" step="1" defaultValue={settings.selection.quotas.tennis} required />
+          <Field label={t("probMax")}>
+            <Input name="probMaxPercent" type="number" min="1" max="99" step="1" defaultValue={Math.round(settings.selection.probMax * 100)} required />
+          </Field>
+          <Field label={t("leagueQuota")}>
+            <Input name="leagueQuota" type="number" min="1" max="8" step="1" defaultValue={settings.selection.leagueQuota} required />
+          </Field>
+          <Field label={t("voteWindowStart")} hint={t("voteWindowHint")}>
+            <Input name="voteWindowStart" type="number" min="0" max="23" step="1" defaultValue={settings.selection.voteWindowStart} required />
+          </Field>
+          <Field label={t("voteWindowEnd")}>
+            <Input name="voteWindowEnd" type="number" min="0" max="23" step="1" defaultValue={settings.selection.voteWindowEnd} required />
           </Field>
           <Field label={t("dataScoreThreshold")} hint={t("dataScoreHint")}>
             <Input name="dataScoreThreshold" type="number" min="1" max="10" step="1" defaultValue={settings.selection.dataScoreThreshold} required />

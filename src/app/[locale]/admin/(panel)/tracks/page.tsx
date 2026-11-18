@@ -1,6 +1,6 @@
 import { Panel, Stat } from "@/components/admin/panel";
 import { loadTracks } from "@/server/admin/queries";
-import { selectionBoard, type RoundStage } from "@/server/domain/selection";
+import { selectionBoard } from "@/server/domain/selection";
 import { getFormatter, getTranslations, setRequestLocale } from "next-intl/server";
 
 export default async function AdminTracksPage(props: { params: Promise<{ locale: string }> }) {
@@ -48,9 +48,8 @@ export default async function AdminTracksPage(props: { params: Promise<{ locale:
               <thead className="text-xs text-muted-foreground">
                 <tr className="border-b">
                   <th className="px-2 py-2 font-medium">{t("event")}</th>
-                  <th className="px-2 py-2 font-medium">{t("significance")}</th>
-                  <th className="px-2 py-2 font-medium">{t("form")}</th>
-                  <th className="px-2 py-2 font-medium">{t("finalScore")}</th>
+                  <th className="px-2 py-2 font-medium">{t("asymmetry")}</th>
+                  <th className="px-2 py-2 font-medium">{t("market")}</th>
                   <th className="px-2 py-2 font-medium">{t("dataScore")}</th>
                 </tr>
               </thead>
@@ -60,23 +59,12 @@ export default async function AdminTracksPage(props: { params: Promise<{ locale:
                     <td className="px-2 py-3">
                       {row.home} — {row.away}
                       <span className="mt-1 block text-muted-foreground">
-                        {row.formSource === "calculated" ? t("formCalculated") : t("formInsufficient")}
-                        {row.lowConfidence ? ` · ${t("lowConfidence")}` : ""}
-                        {row.discardReason ? ` · ${row.discardReason}` : ""}
+                        {row.lowConfidence ? t("lowConfidence") : ""}
+                        {row.discardReason ? `${row.lowConfidence ? " · " : ""}${row.discardReason}` : ""}
                       </span>
                     </td>
-                    <td className="px-2 py-3">
-                      {format.number(row.significanceScore)}
-                      {row.roundStage ? <span className="mt-1 block text-muted-foreground">{t(roundLabel(row.roundStage))}</span> : null}
-                    </td>
-                    <td className="px-2 py-3">
-                      {format.number(row.formHome, { maximumFractionDigits: 2 })}
-                      {" / "}
-                      {format.number(row.formAway, { maximumFractionDigits: 2 })}
-                      {" · "}
-                      {format.number(row.formBonus)}
-                    </td>
-                    <td className="px-2 py-3">{format.number(row.finalScore)}</td>
+                    <td className="px-2 py-3">{format.number(row.asymmetryScore, { style: "percent", maximumFractionDigits: 1 })}</td>
+                    <td className="px-2 py-3">{markets(row.asymmetryMarket)}</td>
                     <td className="px-2 py-3">{row.dataScore == null ? "—" : format.number(row.dataScore)}</td>
                   </tr>
                 ))}
@@ -204,6 +192,22 @@ export default async function AdminTracksPage(props: { params: Promise<{ locale:
           </div>
         )}
       </Panel>
+      <Panel title={t("virtualTitle")} description={t("virtualDescription")}>
+        {data.virtual.events === 0 ? (
+          <p className="text-sm text-muted-foreground">{t("virtualEmpty")}</p>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <Stat
+              label={t("virtualRoi")}
+              value={data.virtual.roi == null ? "—" : format.number(data.virtual.roi, { style: "percent", maximumFractionDigits: 1, signDisplay: "exceptZero" })}
+              hint={data.virtual.profit == null ? undefined : format.number(data.virtual.profit, { maximumFractionDigits: 2, signDisplay: "exceptZero" })}
+            />
+            <Stat label={t("virtualHit")} value={data.virtual.hitRate == null ? "—" : format.number(data.virtual.hitRate, { style: "percent", maximumFractionDigits: 1 })} />
+            <Stat label={t("virtualRecord")} value={`${format.number(data.virtual.won)}/${format.number(data.virtual.lost)}/${format.number(data.virtual.void)}`} />
+            <Stat label={t("virtualPending")} value={format.number(data.virtual.pending)} hint={t("virtualAside", { tied: format.number(data.virtual.tied), unpriced: format.number(data.virtual.unpriced) })} />
+          </div>
+        )}
+      </Panel>
       <Panel title={t("votesTitle")} description={t("votesDescription")}>
         {data.consensus.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t("emptyVotes")}</p>
@@ -252,13 +256,6 @@ export default async function AdminTracksPage(props: { params: Promise<{ locale:
       </Panel>
     </div>
   );
-}
-
-function roundLabel(stage: RoundStage): "roundFinal" | "roundSemifinal" | "roundQuarterfinal" | "roundOf16" {
-  if (stage === "final") return "roundFinal";
-  if (stage === "semifinal") return "roundSemifinal";
-  if (stage === "quarterfinal") return "roundQuarterfinal";
-  return "roundOf16";
 }
 
 function label(messages: { (key: string): string; has: (key: string) => boolean }, key: string | null) {

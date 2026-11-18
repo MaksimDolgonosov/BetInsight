@@ -23,6 +23,8 @@ export type ModelRow = {
   isCandidate: boolean;
   nearMiss: boolean;
   aiPickShortlisted: boolean;
+  asymmetryScore?: number | null;
+  asymmetryMarket?: string | null;
 };
 
 export function evaluateLeague(input: {

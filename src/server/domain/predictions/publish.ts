@@ -48,54 +48,6 @@ export function predictionHash(input: {
   return createHash("sha256").update(JSON.stringify(input)).digest("hex");
 }
 
-export function decideValuePublication(input: {
-  now: Date;
-  commenceTime: Date;
-  candidates: CandidateQuote[];
-  parsed: {
-    pick: { market: string; selection: string; point: number | null };
-    ai_probability: number;
-    confidence: string;
-    reasoning: { ru: string; en: string };
-    skip: boolean;
-  } | null;
-}): { action: "save"; pick: SavedPick } | { action: "skip"; reason: "too_late" | "ai_failed" | "skipped" | "not_candidate" | "missing_reasoning" } {
-  if (input.now.getTime() >= input.commenceTime.getTime()) return { action: "skip", reason: "too_late" };
-  if (!input.parsed) return { action: "skip", reason: "ai_failed" };
-  if (input.parsed.skip) return { action: "skip", reason: "skipped" };
-  const reasoningRu = input.parsed.reasoning.ru.trim();
-  const reasoningEn = input.parsed.reasoning.en.trim();
-  if (!reasoningRu || !reasoningEn) return { action: "skip", reason: "missing_reasoning" };
-
-  const match = input.candidates
-    .filter(
-      (row) =>
-        row.market === input.parsed!.pick.market &&
-        row.outcome === input.parsed!.pick.selection &&
-        samePoint(row.point, input.parsed!.pick.point) &&
-        row.bestPrice > 1,
-    )
-    .sort((left, right) => right.ev - left.ev)[0];
-  if (!match) return { action: "skip", reason: "not_candidate" };
-
-  return {
-    action: "save",
-    pick: {
-      market: match.market,
-      selection: match.outcome,
-      point: match.point,
-      price: match.bestPrice,
-      bookmaker: match.bestBookmaker,
-      modelProb: match.consensusProb,
-      aiProb: input.parsed.ai_probability,
-      ev: match.ev,
-      confidence: input.parsed.confidence,
-      reasoningRu,
-      reasoningEn,
-    },
-  };
-}
-
 export function decideAiPickPublication(input: {
   now: Date;
   commenceTime: Date;

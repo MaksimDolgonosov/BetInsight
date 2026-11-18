@@ -13,7 +13,6 @@ import type { BaselineBet, ModelVoteBet, PublicPick, StatsTrack } from "@/server
 export type PublicFunnel = {
   events: number;
   candidates: number;
-  filtered: number;
 };
 
 export type PublicBoard = {
@@ -25,7 +24,7 @@ export type PublicBoard = {
   funnel: PublicFunnel;
 };
 
-const EMPTY_FUNNEL: PublicFunnel = { events: 0, candidates: 0, filtered: 0 };
+const EMPTY_FUNNEL: PublicFunnel = { events: 0, candidates: 0 };
 
 export function emptyBoard(): PublicBoard {
   return { available: true, epochStartedAt: null, picks: [], baselines: [], votes: [], funnel: EMPTY_FUNNEL };
@@ -108,7 +107,6 @@ async function readBoard(): Promise<PublicBoard> {
   ]);
 
   const latest = latestByEvent(evaluations);
-  const valueSearch = new Set(searchRows.filter((row) => row.purpose === "value_check" && row.eventId).map((row) => row.eventId));
   const researchSearch = new Set(searchRows.filter((row) => row.purpose === "research" && row.eventId).map((row) => row.eventId));
   const closing = latestClosing(closingRows);
 
@@ -133,7 +131,7 @@ async function readBoard(): Promise<PublicBoard> {
       confidence: row.confidence,
       llmModel: row.llmModel,
       promptVersion: row.promptVersion,
-      webSearch: row.track === "ai_pick" ? researchSearch.has(row.eventId) : valueSearch.has(row.eventId),
+      webSearch: researchSearch.has(row.eventId),
       publishedAt: row.publishedAt.toISOString(),
       settledAt: row.settledAt?.toISOString() ?? null,
       hash: row.hash,
@@ -209,21 +207,16 @@ async function readBoard(): Promise<PublicBoard> {
 async function readFunnel(epoch: Date | null): Promise<PublicFunnel> {
   try {
     const db = getDb();
-    const [eventRow, candidateRow, filteredRow] = await Promise.all([
+    const [eventRow, candidateRow] = await Promise.all([
       db.select({ value: count() }).from(events).where(epoch ? gte(events.commenceTime, epoch) : undefined),
       db
         .select({ value: countDistinct(modelEvaluations.eventId) })
         .from(modelEvaluations)
         .where(and(eq(modelEvaluations.source, "job"), eq(modelEvaluations.aiPickShortlisted, true), epoch ? gte(modelEvaluations.createdAt, epoch) : undefined)),
-      db
-        .select({ value: countDistinct(aiConsensus.eventId) })
-        .from(aiConsensus)
-        .where(and(eq(aiConsensus.source, "job"), eq(aiConsensus.status, "no_consensus"), epoch ? gte(aiConsensus.createdAt, epoch) : undefined)),
     ]);
     return {
       events: Number(eventRow[0]?.value ?? 0),
       candidates: Number(candidateRow[0]?.value ?? 0),
-      filtered: Number(filteredRow[0]?.value ?? 0),
     };
   } catch (error) {
     console.error("public funnel unavailable", error instanceof Error ? error.message : "failed");

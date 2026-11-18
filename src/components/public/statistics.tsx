@@ -33,8 +33,8 @@ export async function Statistics({
   });
   const slice = sliceOf(one(query, "slice"));
   const period = periodOf(one(query, "period"));
-  const rows = summary.aiPick.count > 0 ? summary.rows.filter((row) => row.track === "ai_pick") : summary.rows;
-  const block = summary.aiPick.count > 0 ? summary.aiPick : summary.combined;
+  const rows = summary.rows.filter((row) => row.track === "ai_pick");
+  const block = summary.aiPick;
   const bands = calibrationBands(rows);
   const slices = groupSlices(rows, slice);
   const prices = rows.filter((row) => row.status === "won" || row.status === "lost").map((row) => row.price);
@@ -86,8 +86,7 @@ export async function Statistics({
 
           <section className="flex gap-[3px] overflow-x-auto">
             <FunnelStage title={t("funnelEvents")} value={format.number(board.funnel.events)} hint={t("funnelEventsHint")} className="min-w-[220px] flex-1 rounded-l-[16px] bg-[var(--bi-surface)] text-[var(--bi-text)]" />
-            <FunnelStage title={t("funnelCandidates")} value={format.number(board.funnel.candidates)} hint={t("funnelCandidatesHint")} className="w-[380px] shrink-0 bg-[var(--bi-surface-2)] text-[var(--bi-text)]" />
-            <FunnelStage title={t("funnelFiltered")} value={format.number(board.funnel.filtered)} hint={t("funnelFilteredHint")} className="w-[290px] shrink-0 bg-[#a394ff26] text-[var(--bi-ai)]" />
+            <FunnelStage title={t("funnelCandidates")} value={format.number(board.funnel.candidates)} hint={t("funnelCandidatesHint")} className="min-w-[220px] flex-1 bg-[var(--bi-surface-2)] text-[var(--bi-text)]" />
             <FunnelStage title={t("funnelPublished")} value={format.number(block.count)} hint={t("funnelPublishedHint", { roi: signedPercent(format, block.roi) })} className="w-[300px] shrink-0 rounded-r-[16px] bg-[var(--bi-accent)] text-[var(--bi-ink)]" />
           </section>
 

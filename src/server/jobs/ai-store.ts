@@ -2,7 +2,8 @@ import "server-only";
 import { and, desc, eq, gte, lt } from "drizzle-orm";
 import { getDb } from "@/server/db";
 import { aiConsensus, aiRequests, aiVotes, events, modelEvaluations, predictions } from "@/server/db/schema";
-import { samePoint, type PredictionTrack } from "@/server/domain/predictions/publish";
+import type { PredictionTrack } from "@/server/domain/predictions/publish";
+import { researchBriefFromStored, type ResearchBrief } from "@/server/domain/selection/research-report";
 import { refreshPublicBoard } from "@/server/stats/refresh";
 
 export function mskDayRange(day: string): { start: Date; end: Date } {
@@ -29,23 +30,6 @@ export async function predictionExists(eventId: string, track: PredictionTrack):
     .where(and(eq(predictions.eventId, eventId), eq(predictions.track, track)))
     .limit(1);
   return Boolean(row);
-}
-
-export async function otherTrackAgrees(input: {
-  eventId: string;
-  track: PredictionTrack;
-  market: string;
-  selection: string;
-  point: number | null;
-}): Promise<boolean> {
-  const other = input.track === "value" ? "ai_pick" : "value";
-  const [row] = await getDb()
-    .select()
-    .from(predictions)
-    .where(and(eq(predictions.eventId, input.eventId), eq(predictions.track, other)))
-    .limit(1);
-  if (!row) return false;
-  return row.market === input.market && row.selection === input.selection && samePoint(row.point, input.point);
 }
 
 export async function savePrediction(row: {
@@ -77,13 +61,6 @@ export async function savePrediction(row: {
     if (text.includes("predictions_event_track") || text.includes("duplicate key")) return "duplicate";
     throw error;
   }
-  if (row.tracksAgree) {
-    const other = row.track === "value" ? "ai_pick" : "value";
-    await db
-      .update(predictions)
-      .set({ tracksAgree: true })
-      .where(and(eq(predictions.eventId, row.eventId), eq(predictions.track, other)));
-  }
   refreshPublicBoard();
   return "saved";
 }
@@ -96,17 +73,15 @@ export async function countTrackPredictions(track: PredictionTrack, start: Date,
   return rows.length;
 }
 
-export async function latestResearchText(eventId: string, start: Date): Promise<string> {
+export async function latestResearchBrief(eventId: string, start: Date): Promise<ResearchBrief | null> {
   const [row] = await getDb()
     .select()
     .from(aiRequests)
     .where(and(eq(aiRequests.eventId, eventId), eq(aiRequests.purpose, "research"), eq(aiRequests.source, "job"), gte(aiRequests.createdAt, start)))
     .orderBy(desc(aiRequests.createdAt))
     .limit(1);
-  if (!row || row.error) return "";
-  const content = row.rawResponse;
-  if (content && typeof content === "object" && "content" in content && typeof content.content === "string") return content.content;
-  return "";
+  if (!row || row.error) return null;
+  return researchBriefFromStored(row.rawResponse);
 }
 
 export async function votesForEvent(eventId: string, start: Date) {

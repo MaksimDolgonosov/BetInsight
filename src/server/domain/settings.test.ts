@@ -42,8 +42,11 @@ function validEntries(overrides: Record<string, string | string[]> = {}) {
     aiPickMonthlyBudgetUsd: "20",
     selectionWindowMinHours: "4",
     selectionWindowMaxHours: "24",
-    selectionPerLeague: "3",
-    selectionTennis: "2",
+    probMinPercent: "50",
+    probMaxPercent: "70",
+    leagueQuota: "2",
+    voteWindowStart: "8",
+    voteWindowEnd: "20",
     dataScoreThreshold: "6",
     dataScoreLowConf: "4",
     monthlyCreditLimit: "500",
@@ -120,12 +123,16 @@ describe("parseSettingsForm", () => {
     expect(result.settings.selection).toEqual(defaultSettings().selection);
   });
 
-  it("starts the selection pipeline at the version 1.5 defaults", () => {
+  it("starts the selection pipeline at the version 1.8 defaults", () => {
     expect(defaultSettings().aiPick.dailyLimit).toBe(8);
     expect(defaultSettings().selection).toEqual({
       windowMinHours: 4,
       windowMaxHours: 24,
-      quotas: { perLeague: 3, tennis: 2 },
+      probMin: 0.5,
+      probMax: 0.7,
+      leagueQuota: 2,
+      voteWindowStart: 8,
+      voteWindowEnd: 20,
       dataScoreThreshold: 6,
       dataScoreLowConf: 4,
     });

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getAdminStore } from "@/server/admin/store";
 import { buildCreditCoverage, closingLeagueDays, marketsForRequest, resolveOddsMarkets, shouldDropTennis, type UsageCreditRow } from "@/server/budget/coverage";
 import { thresholdsForGroup } from "@/server/domain/odds/evaluate";
+import { selectDay, type AsymmetryMarket } from "@/server/domain/selection";
 import { isSportGroup, LEAGUE_CATALOG, MARKETS, type AdminSettings, type Market } from "@/server/domain/settings";
 import { appBaseUrl, enqueueJob } from "@/server/integrations/qstash/enqueue";
 import { ensureDataSchedules } from "@/server/integrations/qstash/schedules";
@@ -12,7 +13,6 @@ import { scheduleModelFollowups } from "@/server/jobs/ai";
 import { evaluateLeague } from "@/server/jobs/evaluate";
 import { JobInputError } from "@/server/jobs/errors";
 import { oddsRequestCost, planDay, scoresRequestCost } from "@/server/jobs/plan";
-import { planSelection } from "@/server/jobs/selection";
 import {
   budgetAllows,
   enabledLeagues,
@@ -21,13 +21,9 @@ import {
   markScoresMissing,
   listMonthUsage,
   listPlanEvents,
-  listRivalries,
-  listSelectionEvents,
-  listTeamMeta,
   loadLatestOdds,
   rememberCall,
   replaceJobEvaluations,
-  saveSelectionScores,
   saveOdds,
   saveScores,
   saveSports,
@@ -124,6 +120,10 @@ export async function runPlanDay(payload: unknown, now: Date): Promise<JobOutcom
         now,
         leagues,
         coverage,
+        window: {
+          minHours: settings.selection.windowMinHours,
+          maxHours: settings.selection.windowMaxHours,
+        },
         events: stored.map((event) => ({
           sportKey: event.sportKey,
           commenceTime: event.commenceTime.toISOString(),
@@ -141,34 +141,9 @@ export async function runPlanDay(payload: unknown, now: Date): Promise<JobOutcom
         );
         if (!queued.ok) throw new Error(queued.reason);
       }
-      const leagueKeys = new Set(leagues.map((league) => league.key));
-      const selected = planSelection({
-        now,
-        events: (await listSelectionEvents(now, settings.selection.windowMaxHours)).filter((event) => leagueKeys.has(event.sportKey)),
-        teamMeta: await listTeamMeta(),
-        rivalries: await listRivalries(),
-        window: {
-          minHours: settings.selection.windowMinHours,
-          maxHours: settings.selection.windowMaxHours,
-        },
-        dailyLimit: settings.aiPick.dailyLimit,
-        quotas: settings.selection.quotas,
-      });
-      await saveSelectionScores(selected, now);
-      const day = mskDate(now);
-      if (settings.aiPick.enabled) {
-        for (const event of selected) {
-          const queued = await enqueueJob(
-            "ai-research",
-            { eventId: event.eventId, day },
-            { deduplicationId: `ai-research-${event.eventId}-${day}` },
-          );
-          if (!queued.ok) throw new Error(queued.reason);
-        }
-      }
       return {
         status: "done",
-        detail: { calls: calls.length, selected: selected.length, research: settings.aiPick.enabled ? selected.length : 0 },
+        detail: { calls: calls.length },
       };
     },
   });
@@ -310,7 +285,43 @@ async function evaluateModelWork(sportKey: string, day: string, now: Date): Prom
       shortlistSize: settings.aiPick.shortlistSize,
     },
   });
-  const stored = await replaceJobEvaluations(loaded.map((event) => event.id), rows, now);
+  const selected = selectDay({
+    now,
+    events: loaded.map((event) => ({
+      eventId: event.id,
+      sportKey,
+      home: event.home,
+      away: event.away,
+      commenceTime: event.commenceTime,
+      outcomes: rows.flatMap((row) => {
+        if (row.eventId !== event.id || !isAsymmetryMarket(row.market)) return [];
+        return [{ market: row.market, selection: row.outcome, point: row.point, probability: row.consensusProb }];
+      }),
+    })),
+    window: {
+      minHours: settings.selection.windowMinHours,
+      maxHours: settings.selection.windowMaxHours,
+    },
+    range: { min: settings.selection.probMin, max: settings.selection.probMax },
+    leagueQuota: settings.selection.leagueQuota,
+    voteWindow: { startHour: settings.selection.voteWindowStart, endHour: settings.selection.voteWindowEnd },
+  });
+  const selectedById = new Map(selected.map((event) => [event.eventId, event]));
+  const stamped = rows.map((row) => {
+    const pick = selectedById.get(row.eventId);
+    return pick ? { ...row, asymmetryScore: pick.asymmetryScore, asymmetryMarket: pick.asymmetryMarket } : row;
+  });
+  const stored = await replaceJobEvaluations(loaded.map((event) => event.id), stamped, now);
+  if (settings.aiPick.enabled) {
+    for (const event of selected) {
+      const queued = await enqueueJob(
+        "ai-research",
+        { eventId: event.eventId, day },
+        { notBefore: event.voteTime, deduplicationId: `ai-research-${event.eventId}-${day}` },
+      );
+      if (!queued.ok && queued.reason !== "scheduler_unconfigured") throw new Error(queued.reason);
+    }
+  }
   await scheduleModelFollowups({
     rows: stored,
     day,
@@ -328,6 +339,7 @@ async function evaluateModelWork(sportKey: string, day: string, now: Date): Prom
       events: loaded.length,
       rows: rows.length,
       candidates: rows.filter((row) => row.isCandidate).length,
+      selected: selected.length,
       nearMisses: rows.filter((row) => row.nearMiss).length,
     },
   };
@@ -414,6 +426,10 @@ async function followWithSettle(sportKey: string, day: string, purpose: string, 
     }
   }
   await runSettle({ sportKey, day, purpose }, now);
+}
+
+function isAsymmetryMarket(value: string): value is AsymmetryMarket {
+  return value === "h2h" || value === "totals" || value === "spreads";
 }
 
 function eventsForMarkets(events: OddsEvent[], markets: Market[]): OddsEvent[] {

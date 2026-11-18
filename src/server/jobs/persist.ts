@@ -5,12 +5,12 @@ import { absentScoreIds } from "@/server/jobs/plan";
 import { alertBudget } from "@/server/integrations/telegram/alerts";
 import { getDb } from "@/server/db";
 import { apiPayloads, oddsSnapshots } from "@/server/db/data-tables";
-import { apiUsage, auditLog, events, modelEvaluations, rivalryPairs, sports, teamMeta } from "@/server/db/schema";
+import { apiUsage, auditLog, events, modelEvaluations, sports } from "@/server/db/schema";
 import type { NormalizedQuote, Selection } from "@/server/domain/odds/evaluate";
-import { isRoundStage, ROUND_BOARD_HOURS, SELECTION_MARKET, type ScoredEvent } from "@/server/domain/selection";
+import { ROUND_BOARD_HOURS } from "@/server/domain/selection";
 import { MARKETS, type Market } from "@/server/domain/settings";
 import type { ModelRow } from "@/server/jobs/evaluate";
-import { attachResearchScores, attachSelectionScores, selectionScore, type SelectionEvent } from "@/server/jobs/selection";
+import { attachResearchScores, type SelectionEvent } from "@/server/jobs/selection";
 import type { OddsEvent } from "@/server/integrations/odds-api/schema";
 import type { ScoreEvent, TrackedSport, UpcomingEvent } from "@/server/integrations/odds-api/schema";
 
@@ -132,7 +132,7 @@ export async function saveScores(rows: ScoreEvent[], now: Date) {
 const MARKET_SET = new Set<Market>(MARKETS);
 const SELECTIONS = new Set<Selection>(["home", "draw", "away", "over", "under"]);
 
-export async function loadLatestOdds(sportKey: string): Promise<{ id: string; home: string; away: string; quotes: NormalizedQuote[] }[]> {
+export async function loadLatestOdds(sportKey: string): Promise<{ id: string; home: string; away: string; commenceTime: Date; quotes: NormalizedQuote[] }[]> {
   const db = getDb();
   const leagueEvents = await db.select().from(events).where(eq(events.sportKey, sportKey));
   if (leagueEvents.length === 0) return [];
@@ -163,7 +163,7 @@ export async function loadLatestOdds(sportKey: string): Promise<{ id: string; ho
       }];
     });
     if (quotes.length === 0) return [];
-    return [{ id: event.id, home: event.home, away: event.away, quotes }];
+    return [{ id: event.id, home: event.home, away: event.away, commenceTime: event.commenceTime, quotes }];
   });
 }
 
@@ -173,14 +173,6 @@ export async function replaceJobEvaluations(eventIds: string[], rows: ModelRow[]
   const prior = eventIds.length === 0 ? [] : await db
     .select({
       eventId: modelEvaluations.eventId,
-      significanceScore: modelEvaluations.significanceScore,
-      formHome: modelEvaluations.formHome,
-      formAway: modelEvaluations.formAway,
-      formDelta: modelEvaluations.formDelta,
-      formBonus: modelEvaluations.formBonus,
-      finalScore: modelEvaluations.finalScore,
-      formSource: modelEvaluations.formSource,
-      roundStage: modelEvaluations.roundStage,
       dataScore: modelEvaluations.dataScore,
       researchSummary: modelEvaluations.researchSummary,
       discardReason: modelEvaluations.discardReason,
@@ -194,10 +186,7 @@ export async function replaceJobEvaluations(eventIds: string[], rows: ModelRow[]
       .where(and(eq(modelEvaluations.source, "job"), inArray(modelEvaluations.eventId, eventIds), gte(modelEvaluations.createdAt, since)));
   }
   if (rows.length === 0) return [];
-  const scored = attachResearchScores(attachSelectionScores(rows, prior.flatMap((row) => {
-    if (row.formSource !== "calculated" && row.formSource !== "insufficient_data") return [];
-    return [{ ...row, formSource: row.formSource, roundStage: isRoundStage(row.roundStage) ? row.roundStage : null }];
-  })), prior);
+  const scored = attachResearchScores(rows, prior);
   await db.insert(modelEvaluations).values(scored.map((row) => ({ ...row, source: "job" as const })));
   return scored;
 }
@@ -216,53 +205,6 @@ export async function saveResearchScore(eventId: string, score: {
       eq(modelEvaluations.source, "job"),
       gte(modelEvaluations.createdAt, startOfUtcDay(now)),
     ));
-}
-
-export async function saveSelectionScores(selected: readonly ScoredEvent[], now: Date) {
-  if (selected.length === 0) return;
-  const db = getDb();
-  const since = startOfUtcDay(now);
-  const ids = selected.map((event) => event.eventId);
-  await db
-    .delete(modelEvaluations)
-    .where(and(
-      eq(modelEvaluations.source, "job"),
-      eq(modelEvaluations.market, SELECTION_MARKET),
-      inArray(modelEvaluations.eventId, ids),
-      gte(modelEvaluations.createdAt, since),
-    ));
-
-  const placeholders: (ReturnType<typeof selectionPlaceholder>)[] = [];
-  for (const event of selected) {
-    const updated = await db
-      .update(modelEvaluations)
-      .set(selectionScore(event))
-      .where(and(eq(modelEvaluations.eventId, event.eventId), eq(modelEvaluations.source, "job"), gte(modelEvaluations.createdAt, since)))
-      .returning({ id: modelEvaluations.id });
-    if (updated.length === 0) placeholders.push(selectionPlaceholder(event, now));
-  }
-  if (placeholders.length > 0) await db.insert(modelEvaluations).values(placeholders);
-}
-
-function selectionPlaceholder(event: ScoredEvent, now: Date) {
-  return {
-    eventId: event.eventId,
-    home: event.home,
-    away: event.away,
-    market: SELECTION_MARKET,
-    outcome: "event",
-    point: null,
-    consensusProb: 0,
-    bestPrice: 1,
-    bestBookmaker: "—",
-    ev: 0,
-    isCandidate: false,
-    nearMiss: false,
-    aiPickShortlisted: false,
-    ...selectionScore(event),
-    source: "job" as const,
-    createdAt: now,
-  };
 }
 
 export async function listSelectionEvents(now: Date, windowMaxHours: number): Promise<SelectionEvent[]> {
@@ -284,22 +226,6 @@ export async function listSelectionEvents(now: Date, windowMaxHours: number): Pr
       and(eq(events.status, "completed"), gte(events.commenceTime, formSince), lt(events.commenceTime, now)),
       and(eq(events.status, "scheduled"), gte(events.commenceTime, now), lte(events.commenceTime, latest)),
     ));
-}
-
-export async function listTeamMeta() {
-  const rows = await getDb().select().from(teamMeta);
-  return rows.map((row) => ({
-    teamName: row.teamName,
-    sportKey: row.sportKey,
-    leagueKey: row.leagueKey,
-    tableRank: row.tableRank,
-    isRelegation: row.isRelegation,
-  }));
-}
-
-export async function listRivalries() {
-  const rows = await getDb().select().from(rivalryPairs);
-  return rows.map((row) => ({ sportKey: row.sportKey, teamA: row.teamA, teamB: row.teamB }));
 }
 
 export async function listPlanEvents() {

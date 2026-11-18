@@ -1,9 +1,9 @@
 import { CLOSING_LEAD_MS, closingLeagueDays, marketsForRequest, shouldDropTennis, type CreditCoverage } from "@/server/budget/coverage";
+import { inSelectionWindow } from "@/server/domain/selection";
 import type { Market } from "@/server/domain/settings";
 import { mskDate } from "@/server/jobs/time";
 
 const HOUR = 60 * 60 * 1000;
-export const ODDS_LEAD_MS = 4 * HOUR;
 export const SCORES_LAG_MS = 3 * HOUR;
 export const SCORE_LOOKBACK_MS = 3 * 24 * HOUR;
 
@@ -27,8 +27,10 @@ export function planDay(input: {
   leagues: { key: string }[];
   events: PlanEvent[];
   coverage?: CreditCoverage;
+  window?: { minHours: number; maxHours: number };
 }): PlannedCall[] {
   const day = mskDate(input.now);
+  const window = input.window ?? { minHours: 4, maxHours: 24 };
   const leagueKeys = new Set(input.leagues.map((league) => league.key));
   const markets = input.coverage ? marketsForRequest(input.coverage) : undefined;
   const skipTennis = input.coverage && markets ? shouldDropTennis(input.coverage, markets) : false;
@@ -42,17 +44,21 @@ export function planDay(input: {
       (event) => event.sportKey === sportKey && mskDate(new Date(event.commenceTime)) === day,
     );
     const upcoming = today.filter((event) => new Date(event.commenceTime).getTime() > input.now.getTime());
-    if (upcoming.length > 0 && !(skipTennis && sportKey.startsWith("tennis_"))) {
+    const windowed = input.events.filter((event) => eventInWindow(event, sportKey, input.now, window));
+    if (!(skipTennis && sportKey.startsWith("tennis_")) && (windowed.length > 0 || upcoming.length > 0)) {
+      if (windowed.length > 0) {
+        calls.push({
+          job: "fetch-odds",
+          sportKey,
+          day,
+          purpose: "opening",
+          notBefore: input.now,
+          ...(markets ? { markets } : {}),
+        });
+      }
+      if (upcoming.length === 0) continue;
       const first = earliest(upcoming);
       const last = latest(today);
-      calls.push({
-        job: "fetch-odds",
-        sportKey,
-        day,
-        purpose: "opening",
-        notBefore: new Date(first.getTime() - ODDS_LEAD_MS),
-        ...(markets ? { markets } : {}),
-      });
       if (closingKeys.has(sportKey)) {
         calls.push({
           job: "fetch-closing-odds",
@@ -109,6 +115,16 @@ export function absentScoreIds(input: {
     if (commence > latest || commence < earliest) return [];
     return [event.id];
   });
+}
+
+function eventInWindow(
+  event: PlanEvent,
+  sportKey: string,
+  now: Date,
+  window: { minHours: number; maxHours: number },
+): boolean {
+  if (event.sportKey !== sportKey || event.status === "completed" || event.status === "void") return false;
+  return inSelectionWindow(new Date(event.commenceTime), now, window);
 }
 
 function needsScoreRetry(event: PlanEvent, sportKey: string, now: Date): boolean {

@@ -16,10 +16,9 @@ import {
   consensusExists,
   countTrackPredictions,
   latestJobEvaluations,
-  latestResearchText,
+  latestResearchBrief,
   loadEvent,
   mskDayRange,
-  otherTrackAgrees,
   predictionExists,
   saveConsensus,
   savePrediction,
@@ -124,7 +123,7 @@ async function researchEvent(eventId: string, day: string, now: Date): Promise<J
   if (!settings.aiPick.enabled) return { status: "skipped", detail: { reason: "ai_pick_disabled" } };
   const context = await eventContext(eventId);
   if (!context) return { status: "skipped", detail: { reason: "event_missing" } };
-  if (!context.evaluations.some((row) => row.finalScore != null)) return { status: "skipped", detail: { reason: "not_selected" } };
+  if (!context.evaluations.some((row) => row.asymmetryScore != null)) return { status: "skipped", detail: { reason: "not_selected" } };
   if (now.getTime() >= context.event.commenceTime.getTime()) return { status: "skipped", detail: { reason: "too_late" } };
   const spent = await getAdminStore().aiSpendSince(startOfUtcMonth(now), ["research", "vote"]);
   if (spent >= settings.aiPick.monthlyBudgetUsd) return { status: "skipped", detail: { reason: "ai_pick_budget" } };
@@ -189,7 +188,7 @@ async function voteEvent(eventId: string, day: string, model: string, now: Date)
   if (!process.env.OPENROUTER_API_KEY) return { status: "skipped", detail: { reason: "missing_openrouter_key" } };
 
   const { start } = mskDayRange(day);
-  const research = await latestResearchText(eventId, start);
+  const research = await latestResearchBrief(eventId, start);
   const output = await generateVote({
     model,
     webSearch: false,
@@ -204,7 +203,7 @@ async function voteEvent(eventId: string, day: string, model: string, now: Date)
         consensusProb: pick.consensusProb,
         bestPrice: pick.bestPrice,
       })),
-      research: research || null,
+      research,
       lowConfidence: context.evaluations.some((row) => row.lowConfidence),
     },
   });
@@ -290,7 +289,6 @@ async function consensusEvent(eventId: string, day: string, now: Date): Promise<
       ? "already_saved"
       : await storePick({
           event: context.event,
-          track: "ai_pick",
           pick: thinData ? { ...publication.pick, confidence: "low" } : publication.pick,
           model: decision.reasoningModel ?? settings.aiPick.models[0],
           promptVersion: VOTE_PROMPT_VERSION,
@@ -324,7 +322,6 @@ async function consensusEvent(eventId: string, day: string, now: Date): Promise<
 
 async function storePick(input: {
   event: { id: string; home: string; away: string; commenceTime: Date };
-  track: "value" | "ai_pick";
   pick: {
     market: string;
     selection: string;
@@ -343,17 +340,10 @@ async function storePick(input: {
   now: Date;
 }): Promise<"saved" | "duplicate" | "too_late"> {
   const publishedAt = input.now.toISOString();
-  const tracksAgree = await otherTrackAgrees({
-    eventId: input.event.id,
-    track: input.track,
-    market: input.pick.market,
-    selection: input.pick.selection,
-    point: input.pick.point,
-  });
   return savePrediction({
     eventId: input.event.id,
-    track: input.track,
-    tracksAgree,
+    track: "ai_pick",
+    tracksAgree: false,
     market: input.pick.market,
     selection: input.pick.selection,
     point: input.pick.point,
@@ -373,7 +363,7 @@ async function storePick(input: {
       home: input.event.home,
       away: input.event.away,
       commenceTime: input.event.commenceTime.toISOString(),
-      track: input.track,
+      track: "ai_pick",
       market: input.pick.market,
       selection: input.pick.selection,
       point: input.pick.point,

@@ -49,12 +49,14 @@ export type VoteResult = z.infer<typeof voteSchema>;
 export const researchJsonSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["data_score", "has_injuries", "has_lineup", "h2h_available", "summary", "discard_reason"],
+  required: ["data_score", "has_injuries", "has_lineup", "h2h_available", "home_form", "away_form", "summary", "discard_reason"],
   properties: {
     data_score: { type: "integer", minimum: 1, maximum: 10 },
     has_injuries: { type: "boolean" },
     has_lineup: { type: "boolean" },
     h2h_available: { type: "boolean" },
+    home_form: { type: "array", maxItems: 5, items: { type: "string", enum: ["W", "D", "L"] } },
+    away_form: { type: "array", maxItems: 5, items: { type: "string", enum: ["W", "D", "L"] } },
     summary: { type: "string" },
     discard_reason: { type: ["string", "null"] },
   },

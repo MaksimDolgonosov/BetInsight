@@ -24,7 +24,7 @@ export async function HomeScreen({
   const confidence = await getTranslations("public.confidence");
   const format = await getFormatter();
   const summary = summarize(board);
-  const block = summary.aiPick.count > 0 ? summary.aiPick : summary.combined;
+  const block = summary.aiPick;
   const bank = sample(windowed(block.bank, range), 48);
   const upcoming = board.picks
     .filter((pick) => isUpcomingKickoff(pick))

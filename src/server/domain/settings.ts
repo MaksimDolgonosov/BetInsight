@@ -2,10 +2,11 @@ import { z } from "zod";
 import type { ConsensusMode } from "@/server/domain/predictions/ai-pick";
 import {
   DEFAULT_DAILY_LIMIT,
-  DEFAULT_DAILY_QUOTAS,
   DEFAULT_DATA_SCORE_THRESHOLDS,
+  DEFAULT_LEAGUE_QUOTA,
+  DEFAULT_PROB_RANGE,
   DEFAULT_SELECTION_WINDOW,
-  type DailyQuotas,
+  DEFAULT_VOTE_WINDOW,
 } from "@/server/domain/selection";
 import { PROMPTS } from "@/server/integrations/openrouter/prompt";
 
@@ -51,7 +52,11 @@ export type AiPickSettings = {
 export type SelectionSettings = {
   windowMinHours: number;
   windowMaxHours: number;
-  quotas: DailyQuotas;
+  probMin: number;
+  probMax: number;
+  leagueQuota: number;
+  voteWindowStart: number;
+  voteWindowEnd: number;
   dataScoreThreshold: number;
   dataScoreLowConf: number;
 };
@@ -247,10 +252,11 @@ function mergeSelection(stored: SelectionSettings | undefined, fallback: Selecti
   return {
     windowMinHours: stored?.windowMinHours ?? fallback.windowMinHours,
     windowMaxHours: stored?.windowMaxHours ?? fallback.windowMaxHours,
-    quotas: {
-      perLeague: stored?.quotas?.perLeague ?? fallback.quotas.perLeague,
-      tennis: stored?.quotas?.tennis ?? fallback.quotas.tennis,
-    },
+    probMin: stored?.probMin ?? fallback.probMin,
+    probMax: stored?.probMax ?? fallback.probMax,
+    leagueQuota: stored?.leagueQuota ?? fallback.leagueQuota,
+    voteWindowStart: stored?.voteWindowStart ?? fallback.voteWindowStart,
+    voteWindowEnd: stored?.voteWindowEnd ?? fallback.voteWindowEnd,
     dataScoreThreshold: stored?.dataScoreThreshold ?? fallback.dataScoreThreshold,
     dataScoreLowConf: stored?.dataScoreLowConf ?? fallback.dataScoreLowConf,
   };
@@ -276,7 +282,11 @@ export function defaultSettings(model = DEFAULT_LLM_MODEL): AdminSettings {
     selection: {
       windowMinHours: DEFAULT_SELECTION_WINDOW.minHours,
       windowMaxHours: DEFAULT_SELECTION_WINDOW.maxHours,
-      quotas: { ...DEFAULT_DAILY_QUOTAS },
+      probMin: DEFAULT_PROB_RANGE.min,
+      probMax: DEFAULT_PROB_RANGE.max,
+      leagueQuota: DEFAULT_LEAGUE_QUOTA,
+      voteWindowStart: DEFAULT_VOTE_WINDOW.startHour,
+      voteWindowEnd: DEFAULT_VOTE_WINDOW.endHour,
       dataScoreThreshold: DEFAULT_DATA_SCORE_THRESHOLDS.voteMin,
       dataScoreLowConf: DEFAULT_DATA_SCORE_THRESHOLDS.lowConfidenceMin,
     },
@@ -340,10 +350,11 @@ export const adminSettingsSchema = z
     selection: z.object({
       windowMinHours: z.number().int().min(0).max(168),
       windowMaxHours: z.number().int().min(0).max(168),
-      quotas: z.object({
-        perLeague: z.number().int().min(1).max(8),
-        tennis: z.number().int().min(0).max(8),
-      }),
+      probMin: z.number().gt(0).lt(1),
+      probMax: z.number().gt(0).lt(1),
+      leagueQuota: z.number().int().min(1).max(8),
+      voteWindowStart: z.number().int().min(0).max(23),
+      voteWindowEnd: z.number().int().min(0).max(23),
       dataScoreThreshold: z.number().int().min(1).max(10),
       dataScoreLowConf: z.number().int().min(1).max(10),
     }),
@@ -432,6 +443,12 @@ export const adminSettingsSchema = z
     if (value.selection.windowMinHours > value.selection.windowMaxHours) {
       context.addIssue({ code: "custom", path: ["selection", "windowMinHours"], message: "selection_window" });
     }
+    if (value.selection.probMin > value.selection.probMax) {
+      context.addIssue({ code: "custom", path: ["selection", "probMin"], message: "prob_range" });
+    }
+    if (value.selection.voteWindowStart > value.selection.voteWindowEnd) {
+      context.addIssue({ code: "custom", path: ["selection", "voteWindowStart"], message: "vote_window" });
+    }
     if (value.selection.dataScoreLowConf > value.selection.dataScoreThreshold) {
       context.addIssue({ code: "custom", path: ["selection", "dataScoreLowConf"], message: "data_score_range" });
     }
@@ -452,6 +469,8 @@ export type SettingsError =
   | "ai_pick_research"
   | "ai_pick_range"
   | "selection_window"
+  | "prob_range"
+  | "vote_window"
   | "data_score_range";
 
 function numberField(formData: FormData, name: string): number {
@@ -531,10 +550,11 @@ export function parseSettingsForm(
     selection: {
       windowMinHours: numberField(formData, "selectionWindowMinHours"),
       windowMaxHours: numberField(formData, "selectionWindowMaxHours"),
-      quotas: {
-        perLeague: numberField(formData, "selectionPerLeague"),
-        tennis: numberField(formData, "selectionTennis"),
-      },
+      probMin: numberField(formData, "probMinPercent") / 100,
+      probMax: numberField(formData, "probMaxPercent") / 100,
+      leagueQuota: numberField(formData, "leagueQuota"),
+      voteWindowStart: numberField(formData, "voteWindowStart"),
+      voteWindowEnd: numberField(formData, "voteWindowEnd"),
       dataScoreThreshold: numberField(formData, "dataScoreThreshold"),
       dataScoreLowConf: numberField(formData, "dataScoreLowConf"),
     },
@@ -558,6 +578,8 @@ export function parseSettingsForm(
       message === "ai_pick_research" ||
       message === "ai_pick_range" ||
       message === "selection_window" ||
+      message === "prob_range" ||
+      message === "vote_window" ||
       message === "data_score_range"
     ) {
       return { ok: false, error: message };

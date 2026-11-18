@@ -1,8 +1,8 @@
 import type { OutcomeEvaluation, Selection } from "@/server/domain/odds/evaluate";
 import type { ConsensusDecision } from "@/server/domain/predictions/ai-pick";
-import type { PredictionResult, VoteResult } from "@/server/integrations/openrouter/schema";
+import type { VoteResult } from "@/server/integrations/openrouter/schema";
 
-export type TestTrack = "value" | "ai_pick";
+export type TestTrack = "ai_pick";
 
 export type OddsTableRow = {
   eventId: string;
@@ -32,10 +32,9 @@ export type SelectionTableRow = {
   home: string;
   away: string;
   commenceTime: string;
-  significanceScore: number;
-  formBonus: number;
-  finalScore: number;
-  formSource: "calculated" | "insufficient_data";
+  asymmetryScore: number;
+  asymmetryMarket: "h2h" | "totals" | "spreads";
+  voteTime: string;
   selected: boolean;
   tested: boolean;
 };
@@ -61,24 +60,6 @@ export type TestStreamEvent =
     }
   | { type: "model"; rows: ModelTableRow[] }
   | {
-      type: "prediction";
-      track: "value";
-      eventId: string;
-      home: string;
-      away: string;
-      model: string;
-      promptVersion: string;
-      tokensIn: number | null;
-      tokensOut: number | null;
-      costUsd: number | null;
-      latencyMs: number;
-      parsed: PredictionResult | null;
-      raw: string;
-      validationError: string | null;
-      sources: string[];
-      webSearch: boolean;
-    }
-  | {
       type: "research";
       eventId: string;
       home: string;
@@ -90,6 +71,8 @@ export type TestStreamEvent =
       costUsd: number | null;
       latencyMs: number;
       text: string;
+      homeForm: ("W" | "D" | "L")[];
+      awayForm: ("W" | "D" | "L")[];
       sources: string[];
       error: string | null;
       webSearch: boolean;
@@ -121,9 +104,7 @@ export type TestStreamEvent =
   | {
       type: "note";
       code:
-        | "value_cap"
         | "missing_openrouter_key"
-        | "no_value_candidates"
         | "ai_pick_disabled"
         | "ai_pick_budget"
         | "ai_pick_cap"
