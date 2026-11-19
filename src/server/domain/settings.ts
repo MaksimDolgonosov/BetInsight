@@ -477,20 +477,6 @@ function numberField(formData: FormData, name: string): number {
   return Number(formData.get(name));
 }
 
-function thresholdsFromForm(formData: FormData, group: SportGroup, current: SportThresholds): SportThresholds {
-  return {
-    evThreshold: numberField(formData, `${group}.evPercent`) / 100,
-    oddsMin: numberField(formData, `${group}.oddsMin`),
-    oddsMax: numberField(formData, `${group}.oddsMax`),
-    minBookmakers: numberField(formData, `${group}.minBookmakers`),
-    totalsPointMin: numberField(formData, `${group}.totalsPointMin`),
-    totalsPointMax: numberField(formData, `${group}.totalsPointMax`),
-    spreadsPointMin: numberField(formData, `${group}.spreadsPointMin`),
-    spreadsPointMax: numberField(formData, `${group}.spreadsPointMax`),
-    spreadsExcludedAbs: current.spreadsExcludedAbs,
-  };
-}
-
 export function parseSettingsForm(
   formData: FormData,
   current: AdminSettings,
@@ -517,17 +503,13 @@ export function parseSettingsForm(
     });
   }
 
-  const thresholds = Object.fromEntries(
-    SPORT_GROUPS.map((group) => [group, thresholdsFromForm(formData, group, current.thresholds[group])]),
-  ) as Record<SportGroup, SportThresholds>;
-
   const parsed = adminSettingsSchema.safeParse({
     region: String(formData.get("region") ?? ""),
     markets,
     leagues,
-    thresholds,
-    llmModel: String(formData.get("llmModel") ?? ""),
-    promptVersion: String(formData.get("promptVersion") ?? ""),
+    thresholds: current.thresholds,
+    llmModel: current.llmModel,
+    promptVersion: current.promptVersion,
     webSearchEnabled: formData.get("webSearchEnabled") === "on",
     webSearchDailyLimit: numberField(formData, "webSearchDailyLimit"),
     aiPick: {
@@ -540,10 +522,10 @@ export function parseSettingsForm(
       researchModel: String(formData.get("aiPickResearchModel") ?? ""),
       consensusMode: String(formData.get("aiPickConsensusMode") ?? ""),
       probabilityTolerance: numberField(formData, "aiPickTolerancePoints") / 100,
-      oddsMin: numberField(formData, "aiPickOddsMin"),
-      oddsMax: numberField(formData, "aiPickOddsMax"),
-      minEv: numberField(formData, "aiPickMinEvPercent") / 100,
-      shortlistSize: numberField(formData, "aiPickShortlistSize"),
+      oddsMin: current.aiPick.oddsMin,
+      oddsMax: current.aiPick.oddsMax,
+      minEv: current.aiPick.minEv,
+      shortlistSize: current.aiPick.shortlistSize,
       dailyLimit: numberField(formData, "aiPickDailyLimit"),
       monthlyBudgetUsd: numberField(formData, "aiPickMonthlyBudgetUsd"),
     },

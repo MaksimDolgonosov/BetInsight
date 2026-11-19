@@ -97,11 +97,13 @@ function validEntries(overrides: Record<string, string | string[]> = {}) {
 }
 
 describe("parseSettingsForm", () => {
-  it("keeps the default leagues and converts the EV percent", () => {
-    const result = parseSettingsForm(form(validEntries()), defaultSettings());
+  it("keeps the default leagues and the stored thresholds", () => {
+    const current = defaultSettings();
+    current.thresholds.soccer.evThreshold = 0.07;
+    const result = parseSettingsForm(form(validEntries({ "soccer.evPercent": "0" })), current);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.settings.thresholds.soccer.evThreshold).toBeCloseTo(0.02);
+    expect(result.settings.thresholds.soccer.evThreshold).toBeCloseTo(0.07);
     expect(result.settings.leagues).toHaveLength(6);
     expect(result.settings.thresholds.hockey.totalsPointMin).toBe(4.5);
     expect(result.settings.thresholds.hockey.totalsPointMax).toBe(8.5);
@@ -117,7 +119,7 @@ describe("parseSettingsForm", () => {
       "anthropic/claude-haiku-5.5",
       "google/gemini-3.8-flash",
     ]);
-    expect(result.settings.aiPick.minEv).toBeCloseTo(-0.03);
+    expect(result.settings.aiPick.minEv).toBeCloseTo(current.aiPick.minEv);
     expect(result.settings.aiPick.probabilityTolerance).toBeCloseTo(0.02);
     expect(result.settings.aiPick.dailyLimit).toBe(3);
     expect(result.settings.selection).toEqual(defaultSettings().selection);
@@ -155,13 +157,6 @@ describe("parseSettingsForm", () => {
     expect(rejected).toEqual({ ok: false, error: "selection_window" });
   });
 
-  it("allows an EV threshold of zero", () => {
-    const result = parseSettingsForm(form(validEntries({ "soccer.evPercent": "0" })), defaultSettings());
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.settings.thresholds.soccer.evThreshold).toBe(0);
-  });
-
   it("rejects voting models from the same provider", () => {
     const result = parseSettingsForm(
       form(validEntries({ aiPickModel2: "openai/gpt-6.1-terra-mini" })),
@@ -180,7 +175,7 @@ describe("parseSettingsForm", () => {
 
   it("rejects a free OpenRouter model", () => {
     const result = parseSettingsForm(
-      form(validEntries({ llmModel: "meta-llama/llama-3.1-8b-instruct:free" })),
+      form(validEntries({ aiPickModel0: "meta-llama/llama-3.1-8b-instruct:free" })),
       defaultSettings(),
     );
     expect(result).toEqual({ ok: false, error: "free_model" });

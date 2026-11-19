@@ -10,13 +10,7 @@ import { useTranslations } from "next-intl";
 
 const groups: SportGroup[] = [...SPORT_GROUPS];
 
-export function SettingsForm({
-  settings,
-  promptVersions,
-}: {
-  settings: AdminSettings;
-  promptVersions: string[];
-}) {
+export function SettingsForm({ settings }: { settings: AdminSettings }) {
   const t = useTranslations("admin.settings");
   const te = useTranslations("admin.errors");
   const [state, action, pending] = useActionState(saveSettingsAction, null);
@@ -83,51 +77,8 @@ export function SettingsForm({
         </div>
       </Panel>
 
-      {groups.map((group) => (
-        <Panel key={group} title={t(group)} description={t("thresholdsDescription")}>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <Field label={t("evPercent")}>
-              <Input name={`${group}.evPercent`} type="number" min="0" max="99" step="0.1" defaultValue={Number((settings.thresholds[group].evThreshold * 100).toFixed(2))} required />
-            </Field>
-            <Field label={t("oddsMin")}>
-              <Input name={`${group}.oddsMin`} type="number" min="1.01" step="0.01" defaultValue={settings.thresholds[group].oddsMin} required />
-            </Field>
-            <Field label={t("oddsMax")}>
-              <Input name={`${group}.oddsMax`} type="number" min="1.01" step="0.01" defaultValue={settings.thresholds[group].oddsMax} required />
-            </Field>
-            <Field label={t("minBookmakers")}>
-              <Input name={`${group}.minBookmakers`} type="number" min="1" max="30" step="1" defaultValue={settings.thresholds[group].minBookmakers} required />
-            </Field>
-            <Field label={t("totalsMin")}>
-              <Input name={`${group}.totalsPointMin`} type="number" min="0.5" step="0.5" defaultValue={settings.thresholds[group].totalsPointMin} required />
-            </Field>
-            <Field label={t("totalsMax")}>
-              <Input name={`${group}.totalsPointMax`} type="number" min="0.5" step="0.5" defaultValue={settings.thresholds[group].totalsPointMax} required />
-            </Field>
-            <Field label={t("spreadsMin")}>
-              <Input name={`${group}.spreadsPointMin`} type="number" step="0.5" defaultValue={settings.thresholds[group].spreadsPointMin} required />
-            </Field>
-            <Field label={t("spreadsMax")}>
-              <Input name={`${group}.spreadsPointMax`} type="number" step="0.5" defaultValue={settings.thresholds[group].spreadsPointMax} required />
-            </Field>
-          </div>
-        </Panel>
-      ))}
-
       <Panel title={t("modelTitle")} description={t("modelDescription")}>
         <div className="grid gap-3 md:grid-cols-2">
-          <Field label={t("llmModel")}>
-            <Input name="llmModel" defaultValue={settings.llmModel} required />
-          </Field>
-          <Field label={t("promptVersion")}>
-            <select name="promptVersion" defaultValue={settings.promptVersion} className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm">
-              {promptVersions.map((version) => (
-                <option key={version} value={version}>
-                  {version}
-                </option>
-              ))}
-            </select>
-          </Field>
           <Field label={t("monthlyLimit")}>
             <Input name="monthlyCreditLimit" type="number" min="1" step="1" defaultValue={settings.monthlyCreditLimit} required />
           </Field>
@@ -169,18 +120,6 @@ export function SettingsForm({
           </Field>
           <Field label={t("tolerance")} hint={t("toleranceHint")}>
             <Input name="aiPickTolerancePoints" type="number" min="0" max="20" step="0.1" defaultValue={Number((settings.aiPick.probabilityTolerance * 100).toFixed(2))} required />
-          </Field>
-          <Field label={t("aiPickOddsMin")}>
-            <Input name="aiPickOddsMin" type="number" min="1.01" step="0.01" defaultValue={settings.aiPick.oddsMin} required />
-          </Field>
-          <Field label={t("aiPickOddsMax")}>
-            <Input name="aiPickOddsMax" type="number" min="1.01" step="0.01" defaultValue={settings.aiPick.oddsMax} required />
-          </Field>
-          <Field label={t("aiPickMinEv")} hint={t("aiPickMinEvHint")}>
-            <Input name="aiPickMinEvPercent" type="number" min="-50" max="50" step="0.1" defaultValue={Number((settings.aiPick.minEv * 100).toFixed(2))} required />
-          </Field>
-          <Field label={t("shortlistSize")} hint={t("shortlistHint")}>
-            <Input name="aiPickShortlistSize" type="number" min="1" max="8" step="1" defaultValue={settings.aiPick.shortlistSize} required />
           </Field>
           <Field label={t("aiPickDailyLimit")} hint={t("aiPickDailyLimitHint")}>
             <Input name="aiPickDailyLimit" type="number" min="0" max="20" step="1" defaultValue={settings.aiPick.dailyLimit} required />
