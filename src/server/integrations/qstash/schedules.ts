@@ -5,7 +5,7 @@ import { getQstashClient } from "@/server/integrations/qstash/client";
 const DATA_SCHEDULES = [
   { job: "sync-sports", cron: "CRON_TZ=Europe/Moscow 0 4 * * 1" },
   { job: "sync-events", cron: "CRON_TZ=Europe/Moscow 0 */6 * * *" },
-  { job: "plan-day", cron: "CRON_TZ=Europe/Moscow 0 6 * * *" },
+  { job: "plan-day", cron: "CRON_TZ=Europe/Moscow 0 7 * * *" },
   { job: "daily-report", cron: "CRON_TZ=Europe/Moscow 0 23 * * *" },
   { job: "weekly-report", cron: "CRON_TZ=Europe/Moscow 0 10 * * 1" },
 ] as const;
