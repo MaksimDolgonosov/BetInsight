@@ -154,7 +154,7 @@ export async function Statistics({
                 <div className="flex items-center gap-4 bg-[var(--bi-bg)] px-7 py-2.5 font-stat text-[11px] font-medium tracking-[0.04em] text-[var(--bi-text-3)] uppercase">
                   <span className="min-w-0 flex-1">{sliceTitle(t, slice)}</span>
                   <span className="w-[90px]">{t("colCount")}</span>
-                  <span className="w-[110px]">{t("colHit")}</span>
+                  <span className="w-[190px]">{t("colHit")}</span>
                   <span className="w-[110px]">{t("colPrice")}</span>
                   <span className="w-[100px]">{t("colRoi")}</span>
                   <span className="w-[360px]">{t("colScale")}</span>
@@ -168,7 +168,7 @@ export async function Statistics({
                       {slice === "market" ? label(markets, item.label) : slice === "confidence" ? label(confidence, item.label) : item.label}
                     </span>
                     <span className="w-[90px] font-stat text-[14px] font-medium text-[var(--bi-text-2)]">{format.number(item.metrics.count)}</span>
-                    <span className="w-[110px] font-stat text-[14px] font-medium text-[var(--bi-text-2)]">{percent(format, item.metrics.hitRate)}</span>
+                    <span className="w-[190px] font-stat text-[14px] font-medium text-[var(--bi-text-2)]">{percent(format, item.metrics.hitRate)}</span>
                     <span className="w-[110px] font-stat text-[14px] font-medium text-[var(--bi-text-2)]">{item.metrics.averagePrice == null ? "—" : format.number(item.metrics.averagePrice, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     <span className={`w-[100px] font-stat text-[14px] font-semibold ${roiClass(item.metrics.roi)}`}>{signedPercent(format, item.metrics.roi)}</span>
                     <RoiScale roi={item.metrics.roi} />

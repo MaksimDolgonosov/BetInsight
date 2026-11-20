@@ -189,9 +189,9 @@ export async function HomeScreen({
               <div className="hidden items-center gap-4 px-6 py-3.5 font-stat text-[11px] tracking-[0.04em] text-[var(--bi-text-3)] uppercase lg:flex">
                 <span className="w-[110px]">{t("colStart")}</span>
                 <span className="min-w-0 flex-1">{t("colMatch")}</span>
-                <span className="w-[160px]">{t("colPick")}</span>
+                <span className="w-[100px]">{t("colPick")}</span>
                 <span className="w-[100px]">{t("colOdds")}</span>
-                <span className="w-[112px]">{t("colConfidence")}</span>
+                <span className="w-[100px]">{t("colConfidence")}</span>
               </div>
               {upcoming.length === 0 ? (
                 <p className="px-6 py-5 text-[14px] text-[var(--bi-text-3)]">{t("emptyUpcoming")}</p>

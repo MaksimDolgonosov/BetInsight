@@ -107,7 +107,7 @@
       "lost": "Проигрыш",
       "void": "Возврат",
       "pending": "Ожидает",
-      "hitRate": "Hit rate",
+      "hitRate": "% успешных прогнозов",
       "interval": "Интервал 95% {low}–{high}",
       "roi": "ROI и yield",
       "profit": "Прибыль, единицы",
@@ -184,7 +184,7 @@
       "colConfidence": "Уверенность",
       "colPrompt": "Версия промпта",
       "colCount": "Прогн.",
-      "colHit": "Hit rate",
+      "colHit": "% успешных прогнозов",
       "colPrice": "Ср. коэф.",
       "colRoi": "ROI",
       "colScale": "ROI −20% · 0 · +20%"
