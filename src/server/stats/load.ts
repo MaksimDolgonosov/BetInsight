@@ -4,10 +4,11 @@ import { unstable_cache } from "next/cache";
 import { getDb } from "@/server/db";
 import { aiConsensus, aiRequests, aiVotes, appSettings, events, modelEvaluations, predictions, sports } from "@/server/db/schema";
 import { oddsSnapshots } from "@/server/db/data-tables";
-import { quoteTable, type QuoteTable } from "@/server/domain/odds/lines";
+import { averageBookPrice, quoteTable, type QuoteTable } from "@/server/domain/odds/lines";
 import { samePoint } from "@/server/domain/predictions/publish";
 import { gradePrediction } from "@/server/domain/settlement/grade";
 import { inStatsEpoch } from "@/server/domain/stats/epoch";
+import { averageKey, openingAverages } from "@/server/stats/average-price";
 import type { BaselineBet, ModelVoteBet, PublicPick, StatsTrack } from "@/server/domain/stats/metrics";
 
 export type PublicFunnel = {
@@ -30,7 +31,7 @@ export function emptyBoard(): PublicBoard {
   return { available: true, epochStartedAt: null, picks: [], baselines: [], votes: [], funnel: EMPTY_FUNNEL };
 }
 
-const readCachedBoard = unstable_cache(readBoard, ["public-stats-board"], {
+const readCachedBoard = unstable_cache(readBoard, ["public-stats-board-odds"], {
   tags: ["public-stats"],
   revalidate: 3600,
 });
@@ -109,6 +110,15 @@ async function readBoard(): Promise<PublicBoard> {
   const latest = latestByEvent(evaluations);
   const researchSearch = new Set(searchRows.filter((row) => row.purpose === "research" && row.eventId).map((row) => row.eventId));
   const closing = latestClosing(closingRows);
+  const averages = await openingAverages(
+    picks.map((row) => ({
+      eventId: row.eventId,
+      market: row.market,
+      selection: row.selection,
+      point: row.point,
+      at: row.publishedAt,
+    })),
+  );
 
   const publicPicks: PublicPick[] = picks.map((row) => {
     const consensus = consensusFor(consensusRows, row.eventId, row.id);
@@ -139,6 +149,16 @@ async function readBoard(): Promise<PublicBoard> {
       unanimous: consensus ? consensus.votesTotal >= 2 && consensus.votesFor === consensus.votesTotal : null,
       closingPrice: closing.get(quoteKey(row.eventId, row.market, row.selection, row.point)) ?? null,
       commenceTime: row.commenceTime.toISOString(),
+      averagePrice:
+        averages.get(
+          averageKey({
+            eventId: row.eventId,
+            market: row.market,
+            selection: row.selection,
+            point: row.point,
+            at: row.publishedAt,
+          }),
+        ) ?? null,
       ev: row.ev,
       homeScore: row.homeScore,
       awayScore: row.awayScore,
@@ -337,7 +357,7 @@ const EVENT_ID = /^[A-Za-z0-9_-]{1,128}$/;
 export async function loadPublicEvent(eventId: string): Promise<PublicEvent | null> {
   if (!EVENT_ID.test(eventId) || !process.env.DATABASE_URL) return null;
   try {
-    return await unstable_cache(() => readEvent(eventId), ["public-event", eventId], {
+    return await unstable_cache(() => readEvent(eventId), ["public-event-odds", eventId], {
       tags: ["public-stats"],
       revalidate: 3600,
     })();
@@ -453,6 +473,11 @@ async function readEvent(eventId: string): Promise<PublicEvent | null> {
       unanimous: consensus ? consensus.votesTotal >= 2 && consensus.votesFor === consensus.votesTotal : null,
       closingPrice: closing.get(quoteKey(row.eventId, row.market, row.selection, row.point)) ?? null,
       commenceTime: row.commenceTime.toISOString(),
+      averagePrice: averageBookPrice(
+        focusQuotes
+          .filter((item) => item.outcome === row.selection && samePoint(item.point, row.point))
+          .map((item) => ({ bookmaker: item.bookmaker, selection: item.outcome, price: item.price })),
+      ),
       ev: row.ev,
       homeScore: row.homeScore,
       awayScore: row.awayScore,

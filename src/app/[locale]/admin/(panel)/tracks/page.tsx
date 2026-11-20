@@ -15,7 +15,6 @@ export default async function AdminTracksPage(props: { params: Promise<{ locale:
   const data = await loadTracks();
   const candidates = data.evaluations.filter((row) => row.isCandidate);
   const nearMisses = data.evaluations.filter((row) => row.nearMiss);
-  const meanEv = nearMisses.length === 0 ? null : nearMisses.reduce((sum, row) => sum + row.ev, 0) / nearMisses.length;
   const decided = data.consensus.filter((row) => row.matchesMarketFavorite != null);
   const favoriteShare = decided.length === 0 ? null : decided.filter((row) => row.matchesMarketFavorite).length / decided.length;
   const votesById = new Map(data.votes.map((vote) => [vote.id, vote]));
@@ -36,7 +35,7 @@ export default async function AdminTracksPage(props: { params: Promise<{ locale:
           hint={t("budget", { value: format.number(data.settings.aiPick.monthlyBudgetUsd, { style: "currency", currency: "USD" }) })}
         />
         <Stat label={t("candidateCount")} value={format.number(candidates.length)} />
-        <Stat label={t("nearMissCount")} value={format.number(nearMisses.length)} hint={meanEv == null ? t("noNearMiss") : t("meanEv", { value: format.number(meanEv, { style: "percent", maximumFractionDigits: 1 }) })} />
+        <Stat label={t("nearMissCount")} value={format.number(nearMisses.length)} hint={nearMisses.length === 0 ? t("noNearMiss") : undefined} />
         <Stat label={t("favoriteShare")} value={favoriteShare == null ? "—" : format.number(favoriteShare, { style: "percent", maximumFractionDigits: 0 })} />
       </div>
       <Panel title={t("selectionTitle")} description={t("selectionDescription")}>
@@ -97,7 +96,7 @@ export default async function AdminTracksPage(props: { params: Promise<{ locale:
                 <tr className="border-b">
                   <th className="px-2 py-2 font-medium">{t("event")}</th>
                   <th className="px-2 py-2 font-medium">{t("pick")}</th>
-                  <th className="px-2 py-2 font-medium">EV</th>
+                  <th className="px-2 py-2 font-medium">{t("avgOdds")}</th>
                   <th className="px-2 py-2 font-medium">{t("price")}</th>
                   <th className="px-2 py-2 font-medium">{t("source")}</th>
                 </tr>
@@ -110,7 +109,7 @@ export default async function AdminTracksPage(props: { params: Promise<{ locale:
                       {label(markets, row.market)} · {label(selections, row.outcome)}
                       {row.point != null ? ` ${row.point}` : ""}
                     </td>
-                    <td className="px-2 py-3">{format.number(row.ev, { style: "percent", maximumFractionDigits: 1 })}</td>
+                    <td className="px-2 py-3">{odds(format, row.averagePrice)}</td>
                     <td className="px-2 py-3">{format.number(row.bestPrice, { maximumFractionDigits: 2 })} · {row.bestBookmaker}</td>
                     <td className="px-2 py-3">{sources(row.source)}</td>
                   </tr>
@@ -169,7 +168,7 @@ export default async function AdminTracksPage(props: { params: Promise<{ locale:
                 <tr className="border-b">
                   <th className="px-2 py-2 font-medium">{t("event")}</th>
                   <th className="px-2 py-2 font-medium">{t("pick")}</th>
-                  <th className="px-2 py-2 font-medium">EV</th>
+                  <th className="px-2 py-2 font-medium">{t("avgOdds")}</th>
                   <th className="px-2 py-2 font-medium">{t("price")}</th>
                   <th className="px-2 py-2 font-medium">{t("source")}</th>
                 </tr>
@@ -182,7 +181,7 @@ export default async function AdminTracksPage(props: { params: Promise<{ locale:
                       {label(markets, row.market)} · {label(selections, row.outcome)}
                       {row.point != null ? ` ${row.point}` : ""}
                     </td>
-                    <td className="px-2 py-3">{format.number(row.ev, { style: "percent", maximumFractionDigits: 1 })}</td>
+                    <td className="px-2 py-3">{odds(format, row.averagePrice)}</td>
                     <td className="px-2 py-3">{format.number(row.bestPrice, { maximumFractionDigits: 2 })} · {row.bestBookmaker}</td>
                     <td className="px-2 py-3">{sources(row.source)}</td>
                   </tr>
@@ -256,6 +255,11 @@ export default async function AdminTracksPage(props: { params: Promise<{ locale:
       </Panel>
     </div>
   );
+}
+
+function odds(format: Awaited<ReturnType<typeof getFormatter>>, value: number | null) {
+  if (value == null) return "—";
+  return format.number(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function label(messages: { (key: string): string; has: (key: string) => boolean }, key: string | null) {

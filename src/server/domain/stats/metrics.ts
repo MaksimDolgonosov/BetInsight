@@ -30,6 +30,7 @@ export type PublicPick = {
   unanimous: boolean | null;
   closingPrice: number | null;
   commenceTime?: string | null;
+  averagePrice?: number | null;
   ev?: number | null;
   homeScore?: number | null;
   awayScore?: number | null;

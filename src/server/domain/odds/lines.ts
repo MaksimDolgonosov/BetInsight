@@ -11,6 +11,26 @@ export type QuoteTable = {
   rows: { bookmaker: string; prices: Record<string, number | null>; margin: number | null }[];
 };
 
+export function averageBookPrice(quotes: QuoteRow[]): number | null {
+  const byBookmaker = new Map<string, number>();
+  for (const quote of quotes) {
+    if (!(quote.price > 1)) continue;
+    const current = byBookmaker.get(quote.bookmaker);
+    if (current == null || quote.price > current) byBookmaker.set(quote.bookmaker, quote.price);
+  }
+  if (byBookmaker.size === 0) return null;
+  const prices = [...byBookmaker.values()];
+  return prices.reduce((sum, price) => sum + price, 0) / prices.length;
+}
+
+export function latestBefore<T extends { fetchedAt: Date }>(rows: T[], at: Date): T[] {
+  const prior = rows.filter((row) => row.fetchedAt.getTime() <= at.getTime());
+  const pool = prior.length > 0 ? prior : rows;
+  if (pool.length === 0) return [];
+  const latest = Math.max(...pool.map((row) => row.fetchedAt.getTime()));
+  return pool.filter((row) => latest - row.fetchedAt.getTime() < 5000);
+}
+
 export function quoteTable(quotes: QuoteRow[]): QuoteTable {
   const byBookmaker = new Map<string, Map<string, number>>();
   for (const quote of quotes) {

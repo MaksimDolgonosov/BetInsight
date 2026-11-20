@@ -190,7 +190,7 @@ export async function HomeScreen({
                 <span className="w-[110px]">{t("colStart")}</span>
                 <span className="min-w-0 flex-1">{t("colMatch")}</span>
                 <span className="w-[160px]">{t("colPick")}</span>
-                <span className="w-16">{t("colEv")}</span>
+                <span className="w-[100px]">{t("colOdds")}</span>
                 <span className="w-[112px]">{t("colConfidence")}</span>
               </div>
               {upcoming.length === 0 ? (
@@ -222,8 +222,8 @@ export async function HomeScreen({
                       </span>
                       <span className="truncate text-[13px] text-[var(--bi-text-2)]">{pickName(pick, selections)}</span>
                     </div>
-                    <span className="w-16 text-[14px] font-semibold text-[var(--bi-win)]">
-                      {pick.ev == null ? "—" : signedPercent(format, pick.ev)}
+                    <span className="w-[100px] font-stat text-[14px] font-medium">
+                      {odds(format, pick.averagePrice)}
                     </span>
                     <span
                       className={`inline-flex w-fit items-center gap-1.5 rounded-full px-2 py-1 text-[12px] font-semibold ${confidenceClass(pick.confidence)}`}
@@ -480,6 +480,11 @@ function label(messages: Awaited<ReturnType<typeof getTranslations>>, key: strin
 function percent(format: Awaited<ReturnType<typeof getFormatter>>, value: number | null) {
   if (value == null) return "—";
   return format.number(value, { style: "percent", maximumFractionDigits: 1 });
+}
+
+function odds(format: Awaited<ReturnType<typeof getFormatter>>, value: number | null | undefined) {
+  if (value == null) return "—";
+  return format.number(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function signedPercent(format: Awaited<ReturnType<typeof getFormatter>>, value: number | null) {

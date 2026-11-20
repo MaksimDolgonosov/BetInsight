@@ -9,6 +9,7 @@ import { redisConfigured } from "@/server/integrations/redis/client";
 import { listActiveTennisLeagues } from "@/server/integrations/odds-api/tennis";
 import { loadVirtualNoConsensus } from "@/server/admin/virtual-consensus";
 import { listSavedPredictions } from "@/server/jobs/ai-store";
+import { averageKey, openingAverages } from "@/server/stats/average-price";
 
 export async function loadOverview() {
   const now = new Date();
@@ -138,9 +139,31 @@ export async function loadTracks() {
   const store = getAdminStore();
   const settings = await store.getSettings();
   const epoch = await store.getStatsEpoch();
-  const evaluations = (await store.listModelEvaluations(200)).filter((row) =>
+  const stored = (await store.listModelEvaluations(200)).filter((row) =>
     inStatsEpoch(row.createdAt, epoch.startedAt),
   );
+  const averages = await openingAverages(
+    stored.map((row) => ({
+      eventId: row.eventId,
+      market: row.market,
+      selection: row.outcome,
+      point: row.point,
+      at: new Date(row.createdAt),
+    })),
+  );
+  const evaluations = stored.map((row) => ({
+    ...row,
+    averagePrice:
+      averages.get(
+        averageKey({
+          eventId: row.eventId,
+          market: row.market,
+          selection: row.outcome,
+          point: row.point,
+          at: new Date(row.createdAt),
+        }),
+      ) ?? null,
+  }));
   const votes = (await store.listVotes(200)).filter((row) => inStatsEpoch(row.createdAt, epoch.startedAt));
   const consensus = (await store.listConsensus(40)).filter((row) => inStatsEpoch(row.createdAt, epoch.startedAt));
   const predictions = process.env.DATABASE_URL

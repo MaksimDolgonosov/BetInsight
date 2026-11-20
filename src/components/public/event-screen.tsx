@@ -70,7 +70,7 @@ export async function EventScreen({ locale, event }: { locale: string; event: Pu
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <Stat label={t("consensus")} value={percent(format, consensus)} />
                 <Stat label={t("aiProbability")} value={percent(format, pick.aiProb)} />
-                <Stat label={t("ev")} value={signedPercent(format, pick.ev ?? null)} accent />
+                <Stat label={t("averageOdds")} value={odds(format, pick.averagePrice)} />
                 <Stat label={t("confidence")} value={pick.confidence ? label(confidence, pick.confidence) : "—"} />
               </div>
               <div className="flex flex-col gap-3">
@@ -247,14 +247,14 @@ function label(messages: Awaited<ReturnType<typeof getTranslations>>, key: strin
   return messages.has(key) ? messages(key) : key;
 }
 
+function odds(format: Awaited<ReturnType<typeof getFormatter>>, value: number | null | undefined) {
+  if (value == null) return "—";
+  return format.number(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 function percent(format: Awaited<ReturnType<typeof getFormatter>>, value: number | null) {
   if (value == null) return "—";
   return format.number(value, { style: "percent", maximumFractionDigits: 1 });
-}
-
-function signedPercent(format: Awaited<ReturnType<typeof getFormatter>>, value: number | null) {
-  if (value == null) return "—";
-  return format.number(value, { style: "percent", maximumFractionDigits: 1, signDisplay: "exceptZero" });
 }
 
 function signedNumber(format: Awaited<ReturnType<typeof getFormatter>>, value: number, digits: number) {
