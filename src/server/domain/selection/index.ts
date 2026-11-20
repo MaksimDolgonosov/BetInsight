@@ -26,6 +26,7 @@ export { assessForm, finalScore, formScore, type FormAssessment, type FormResult
 export { teamForm, type FinishedMatch } from "./history";
 export { applyLeagueQuota, type LeagueCandidate } from "./quotas";
 export { rankDay, selectDay, type PricedEvent, type SelectedEvent } from "./select";
+export { scheduledForecasts, type ScheduledForecast, type ScheduledSource } from "./scheduled";
 export { voteTime, type VoteTimeInput } from "./vote-time";
 export { inferLeagueClass, isDerby, significanceScore, type SignificanceInput, type TeamStanding } from "./significance";
 export { inferRounds, ROUND_BOARD_HOURS, type RoundFixture, type RoundHint } from "./round";

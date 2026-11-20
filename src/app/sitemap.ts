@@ -8,7 +8,7 @@ const PAGES = ["", "/forecasts", "/stats", "/methodology"];
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const origin = siteOrigin();
   const board = await loadPublicBoard();
-  const events = [...new Set(board.picks.map((pick) => `/events/${pick.eventId}`))];
+  const events = [...new Set([...board.picks.map((pick) => pick.eventId), ...board.scheduled.map((match) => match.eventId)].map((id) => `/events/${id}`))];
   return [...PAGES, ...events].flatMap((path) =>
     routing.locales.map((locale) => ({
       url: `${origin}/${locale}${path}`,

@@ -154,6 +154,7 @@ export const modelEvaluations = pgTable(
     significanceScore: smallint("significance_score"),
     asymmetryScore: numeric("asymmetry_score", { precision: 4, scale: 3, mode: "number" }),
     asymmetryMarket: text("asymmetry_market"),
+    voteTime: timestamp("vote_time", { withTimezone: true }),
     formHome: numeric("form_home", { precision: 4, scale: 3, mode: "number" }),
     formAway: numeric("form_away", { precision: 4, scale: 3, mode: "number" }),
     formDelta: numeric("form_delta", { precision: 4, scale: 3, mode: "number" }),

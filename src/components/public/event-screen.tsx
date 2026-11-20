@@ -6,7 +6,7 @@ import { ReasoningTabs } from "@/components/public/reasoning-tabs";
 import { SiteFooter } from "@/components/public/site-footer";
 import { SiteHeader } from "@/components/public/site-header";
 import { Link } from "@/i18n/navigation";
-import type { MarketQuote, PublicEvent } from "@/server/stats/load";
+import type { MarketQuote, PublicEvent, ScheduledForecast } from "@/server/stats/load";
 import { ChevronRight, Sparkles } from "lucide-react";
 import { getFormatter, getTranslations } from "next-intl/server";
 
@@ -148,6 +148,44 @@ export async function EventScreen({ locale, event }: { locale: string; event: Pu
               ) : null}
             </aside>
           </section>
+        </main>
+        <SiteFooter locale={locale} />
+      </div>
+    </div>
+  );
+}
+
+export async function ScheduledScreen({ locale, match }: { locale: string; match: ScheduledForecast }) {
+  const t = await getTranslations("public.event");
+  const home = await getTranslations("public.home");
+  const format = await getFormatter();
+
+  return (
+    <div className="bi-stats min-h-screen">
+      <div className="mx-auto flex w-full max-w-[1440px] flex-col">
+        <SiteHeader locale={locale} active="forecasts" path={`/events/${match.eventId}`} />
+        <main className="flex flex-col gap-8 px-4 py-8 lg:px-16 lg:pt-8 lg:pb-16">
+          <nav className="flex flex-wrap items-center gap-2 text-[13px] text-[var(--bi-text-3)]">
+            <Link href="/forecasts" className="text-[var(--bi-text-2)]">{t("crumbForecasts")}</Link>
+            <ChevronRight className="size-3.5" />
+            <span>{match.league}</span>
+            <ChevronRight className="size-3.5" />
+            <span className="text-[var(--bi-text)]">{match.home} — {match.away}</span>
+          </nav>
+          <section className="grid items-center gap-8 lg:grid-cols-[1fr_auto_1fr]">
+            <Team name={match.home} role={t("home")} mark={teamMark(match.home)} align="end" tone="home" />
+            <div className="flex flex-col items-center gap-2 text-center">
+              <p className="text-[12px] text-[var(--bi-text-3)]">{sportMark(match.sportKey)} {match.league}</p>
+              <KickoffClock at={match.commenceTime} started={home("started")} dayUnit={t("dayUnit")} hourUnit={t("hourUnit")} />
+              <p className="text-[13px] text-[var(--bi-text-2)]">{t("until", { when: when(match.commenceTime, format, home) })}</p>
+            </div>
+            <Team name={match.away} role={t("away")} mark={teamMark(match.away)} align="start" tone="away" />
+          </section>
+          <article className="flex max-w-[720px] flex-col gap-3 rounded-[24px] border border-[var(--bi-border)] bg-[var(--bi-surface)] p-6 lg:p-7">
+            <h1 className="font-display text-[32px] leading-none font-semibold tracking-[-1px] lg:text-[40px]">{t("forming")}</h1>
+            <p className="font-stat text-[24px] font-semibold">{when(match.voteTime, format, home)}</p>
+            <p className="text-[14px] text-[var(--bi-text-2)]">{t("formingHint")}</p>
+          </article>
         </main>
         <SiteFooter locale={locale} />
       </div>

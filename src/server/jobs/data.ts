@@ -10,6 +10,7 @@ import { ensureDataSchedules } from "@/server/integrations/qstash/schedules";
 import { fetchLeagueOdds, fetchSportEvents, fetchSports, fetchSportScores, oddsApiMode } from "@/server/integrations/odds-api/client";
 import { mapOddsEvents, mapScores, type OddsEvent } from "@/server/integrations/odds-api/schema";
 import { scheduleModelFollowups } from "@/server/jobs/ai";
+import { refreshPublicBoard } from "@/server/stats/refresh";
 import { evaluateLeague } from "@/server/jobs/evaluate";
 import { JobInputError } from "@/server/jobs/errors";
 import { oddsRequestCost, planDay, scoresRequestCost } from "@/server/jobs/plan";
@@ -309,7 +310,9 @@ async function evaluateModelWork(sportKey: string, day: string, now: Date): Prom
   const selectedById = new Map(selected.map((event) => [event.eventId, event]));
   const stamped = rows.map((row) => {
     const pick = selectedById.get(row.eventId);
-    return pick ? { ...row, asymmetryScore: pick.asymmetryScore, asymmetryMarket: pick.asymmetryMarket } : row;
+    return pick
+      ? { ...row, asymmetryScore: pick.asymmetryScore, asymmetryMarket: pick.asymmetryMarket, voteTime: pick.voteTime }
+      : row;
   });
   const stored = await replaceJobEvaluations(loaded.map((event) => event.id), stamped, now);
   if (settings.aiPick.enabled) {
@@ -333,6 +336,7 @@ async function evaluateModelWork(sportKey: string, day: string, now: Date): Prom
       lowConfidenceMin: settings.selection.dataScoreLowConf,
     },
   });
+  refreshPublicBoard();
   return {
     status: "done",
     detail: {

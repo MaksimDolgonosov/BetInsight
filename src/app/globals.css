@@ -136,6 +136,31 @@
   color: var(--bi-text);
 }
 
+.bi-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--bi-bar) transparent;
+}
+
+.bi-scroll::-webkit-scrollbar {
+  width: 10px;
+}
+
+.bi-scroll::-webkit-scrollbar-track {
+  background: transparent;
+  margin-block: 12px;
+}
+
+.bi-scroll::-webkit-scrollbar-thumb {
+  background-color: var(--bi-bar);
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+.bi-scroll:hover::-webkit-scrollbar-thumb {
+  background-color: var(--bi-text-3);
+}
+
 @layer base {
   .font-display {
     font-family: var(--font-display), var(--font-manrope), "Space Grotesk", sans-serif;

@@ -1,5 +1,5 @@
 import "server-only";
-import { and, count, countDistinct, desc, eq, gte, inArray } from "drizzle-orm";
+import { and, count, countDistinct, desc, eq, gt, gte, inArray, isNotNull } from "drizzle-orm";
 import { unstable_cache } from "next/cache";
 import { getDb } from "@/server/db";
 import { aiConsensus, aiRequests, aiVotes, appSettings, events, modelEvaluations, predictions, sports } from "@/server/db/schema";
@@ -9,6 +9,7 @@ import { samePoint } from "@/server/domain/predictions/publish";
 import { gradePrediction } from "@/server/domain/settlement/grade";
 import { inStatsEpoch } from "@/server/domain/stats/epoch";
 import { averageKey, openingAverages } from "@/server/stats/average-price";
+import { scheduledForecasts, type ScheduledForecast } from "@/server/domain/selection/scheduled";
 import type { BaselineBet, ModelVoteBet, PublicPick, StatsTrack } from "@/server/domain/stats/metrics";
 
 export type PublicFunnel = {
@@ -16,10 +17,13 @@ export type PublicFunnel = {
   candidates: number;
 };
 
+export type { ScheduledForecast };
+
 export type PublicBoard = {
   available: boolean;
   epochStartedAt: string | null;
   picks: PublicPick[];
+  scheduled: ScheduledForecast[];
   baselines: BaselineBet[];
   votes: ModelVoteBet[];
   funnel: PublicFunnel;
@@ -28,10 +32,10 @@ export type PublicBoard = {
 const EMPTY_FUNNEL: PublicFunnel = { events: 0, candidates: 0 };
 
 export function emptyBoard(): PublicBoard {
-  return { available: true, epochStartedAt: null, picks: [], baselines: [], votes: [], funnel: EMPTY_FUNNEL };
+  return { available: true, epochStartedAt: null, picks: [], scheduled: [], baselines: [], votes: [], funnel: EMPTY_FUNNEL };
 }
 
-const readCachedBoard = unstable_cache(readBoard, ["public-stats-board-odds"], {
+const readCachedBoard = unstable_cache(readBoard, ["public-stats-board-scheduled"], {
   tags: ["public-stats"],
   revalidate: 3600,
 });
@@ -48,8 +52,19 @@ export async function loadPublicBoard(): Promise<PublicBoard> {
 
 async function readBoard(): Promise<PublicBoard> {
   const db = getDb();
-  const [settings] = await db.select({ epoch: appSettings.statsEpochStartedAt }).from(appSettings).limit(1);
+  const [settings] = await db
+    .select({
+      epoch: appSettings.statsEpochStartedAt,
+      voteStart: appSettings.voteWindowStart,
+      voteEnd: appSettings.voteWindowEnd,
+    })
+    .from(appSettings)
+    .limit(1);
   const epochStartedAt = settings?.epoch ?? null;
+  const voteWindow = {
+    startHour: settings?.voteStart ?? 8,
+    endHour: settings?.voteEnd ?? 20,
+  };
   const joined = await db
     .select({
       id: predictions.id,
@@ -91,8 +106,9 @@ async function readBoard(): Promise<PublicBoard> {
     return [{ ...row, status, track, publishedAt: row.publishedAt }];
   });
   const funnel = await readFunnel(epochStartedAt);
+  const scheduled = await readScheduled(db, voteWindow);
   if (picks.length === 0) {
-    return { available: true, epochStartedAt: epochStartedAt?.toISOString() ?? null, picks: [], baselines: [], votes: [], funnel };
+    return { available: true, epochStartedAt: epochStartedAt?.toISOString() ?? null, picks: [], scheduled, baselines: [], votes: [], funnel };
   }
 
   const eventIds = [...new Set(picks.map((row) => row.eventId))];
@@ -218,10 +234,74 @@ async function readBoard(): Promise<PublicBoard> {
     available: true,
     epochStartedAt: epochStartedAt?.toISOString() ?? null,
     picks: publicPicks,
+    scheduled,
     baselines,
     votes,
     funnel,
   };
+}
+
+async function readScheduled(
+  db: ReturnType<typeof getDb>,
+  voteWindow: { startHour: number; endHour: number },
+  eventId?: string,
+  now = new Date(),
+): Promise<ScheduledForecast[]> {
+  const rows = await db
+    .select({
+      eventId: modelEvaluations.eventId,
+      home: events.home,
+      away: events.away,
+      sportKey: events.sportKey,
+      league: sports.title,
+      commenceTime: events.commenceTime,
+      voteTime: modelEvaluations.voteTime,
+      createdAt: modelEvaluations.createdAt,
+      asymmetryScore: modelEvaluations.asymmetryScore,
+      discardReason: modelEvaluations.discardReason,
+    })
+    .from(modelEvaluations)
+    .innerJoin(events, eq(events.id, modelEvaluations.eventId))
+    .leftJoin(sports, eq(sports.key, events.sportKey))
+    .where(and(
+      eq(modelEvaluations.source, "job"),
+      isNotNull(modelEvaluations.asymmetryScore),
+      eq(events.status, "scheduled"),
+      gt(events.commenceTime, now),
+      eventId ? eq(events.id, eventId) : undefined,
+    ));
+  const eventIds = [...new Set(rows.map((row) => row.eventId))];
+  const published = eventIds.length === 0
+    ? []
+    : await db
+      .select({ eventId: predictions.eventId })
+      .from(predictions)
+      .where(and(eq(predictions.track, "ai_pick"), inArray(predictions.eventId, eventIds)));
+  return scheduledForecasts({
+    rows,
+    publishedEventIds: new Set(published.map((row) => row.eventId)),
+    now,
+    voteWindow,
+  });
+}
+
+export async function loadScheduledForecast(eventId: string): Promise<ScheduledForecast | null> {
+  if (!EVENT_ID.test(eventId) || !process.env.DATABASE_URL) return null;
+  try {
+    const db = getDb();
+    const [settings] = await db
+      .select({ voteStart: appSettings.voteWindowStart, voteEnd: appSettings.voteWindowEnd })
+      .from(appSettings)
+      .limit(1);
+    const matches = await readScheduled(db, {
+      startHour: settings?.voteStart ?? 8,
+      endHour: settings?.voteEnd ?? 20,
+    }, eventId);
+    return matches[0] ?? null;
+  } catch (error) {
+    console.error("scheduled forecast unavailable", error instanceof Error ? error.message : "failed");
+    return null;
+  }
 }
 
 async function readFunnel(epoch: Date | null): Promise<PublicFunnel> {

@@ -29,9 +29,19 @@ export async function Forecasts({
   const filter = parseForecastFilter(query);
   const options = filterChoices({ leagues: [], models: [], promptVersions: [], picks: board.picks });
   const rows = board.picks.filter((pick) => matches(pick, filter));
-  const upcoming = rows
-    .filter((pick) => isUpcomingKickoff(pick))
-    .sort((left, right) => (left.commenceTime ?? "").localeCompare(right.commenceTime ?? ""));
+  const scheduled = filter.market
+    ? []
+    : board.scheduled.filter((match) => {
+        if (filter.league && match.sportKey !== filter.league) return false;
+        const day = match.commenceTime.slice(0, 10);
+        if (filter.from && day < filter.from) return false;
+        if (filter.to && day > filter.to) return false;
+        return true;
+      });
+  const upcoming = [
+    ...rows.filter((pick) => isUpcomingKickoff(pick)).map((pick) => ({ kind: "pick" as const, at: pick.commenceTime ?? "", pick })),
+    ...scheduled.map((match) => ({ kind: "scheduled" as const, at: match.commenceTime, match })),
+  ].sort((left, right) => left.at.localeCompare(right.at));
   const archive = rows
     .filter((pick) => pick.status !== "pending")
     .filter((pick) => !filter.result || pick.status === filter.result)
@@ -71,16 +81,32 @@ export async function Forecasts({
             </div>
             <div className="overflow-hidden rounded-[20px] border border-[var(--bi-border)] bg-[var(--bi-surface)]">
               <Header labels={[t("colStart"), t("colMatch"), t("colPick"), home("colConfidence")]} />
-              {upcoming.length === 0 ? <p className="px-6 py-5 text-[14px] text-[var(--bi-text-3)]">{t("emptyUpcoming")}</p> : upcoming.map((pick) => (
-                <Link key={pick.id} href={`/events/${pick.eventId}`} className="flex flex-col gap-3 border-t border-[var(--bi-border)] px-6 py-[18px] lg:flex-row lg:items-center lg:gap-4">
+              {upcoming.length === 0 ? <p className="px-6 py-5 text-[14px] text-[var(--bi-text-3)]">{t("emptyUpcoming")}</p> : upcoming.map((item) => item.kind === "scheduled" ? (
+                <Link key={item.match.eventId} href={`/events/${item.match.eventId}`} className="flex flex-col gap-3 border-t border-[var(--bi-border)] px-6 py-[18px] lg:flex-row lg:items-center lg:gap-4">
                   <div className="flex w-full flex-col gap-1 lg:w-[130px]">
-                    {pick.commenceTime ? <Countdown at={pick.commenceTime} started={home("started")} /> : null}
-                    <span className="text-[12px] text-[var(--bi-text-3)]">{pick.commenceTime ? when(pick.commenceTime, format, home) : "—"}</span>
+                    <Countdown at={item.match.commenceTime} started={home("started")} />
+                    <span className="text-[12px] text-[var(--bi-text-3)]">{when(item.match.commenceTime, format, home)}</span>
                   </div>
-                  <Match pick={pick} />
-                  <Pick pick={pick} home={home} selections={selections} />
-                  <span className={`inline-flex w-fit rounded-full px-2 py-1 text-[12px] font-semibold ${confidenceClass(pick.confidence)}`}>
-                    {pick.confidence ? label(confidence, pick.confidence) : "—"}
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                    <span className="text-[12px] text-[var(--bi-text-3)]">{sportMark(item.match.sportKey)} {item.match.league}</span>
+                    <span className="truncate text-[15px] font-semibold">{item.match.home} — {item.match.away}</span>
+                  </div>
+                  <div className="flex w-full flex-col gap-1 lg:w-[180px]">
+                    <span className="text-[14px] font-semibold">{home("forming")}</span>
+                    <span className="text-[12px] text-[var(--bi-text-3)]">{when(item.match.voteTime, format, home)}</span>
+                  </div>
+                  <span className="w-[140px] text-[14px] text-[var(--bi-text-3)]">—</span>
+                </Link>
+              ) : (
+                <Link key={item.pick.id} href={`/events/${item.pick.eventId}`} className="flex flex-col gap-3 border-t border-[var(--bi-border)] px-6 py-[18px] lg:flex-row lg:items-center lg:gap-4">
+                  <div className="flex w-full flex-col gap-1 lg:w-[130px]">
+                    {item.pick.commenceTime ? <Countdown at={item.pick.commenceTime} started={home("started")} /> : null}
+                    <span className="text-[12px] text-[var(--bi-text-3)]">{item.pick.commenceTime ? when(item.pick.commenceTime, format, home) : "—"}</span>
+                  </div>
+                  <Match pick={item.pick} />
+                  <Pick pick={item.pick} home={home} selections={selections} />
+                  <span className={`inline-flex w-fit rounded-full px-2 py-1 text-[12px] font-semibold ${confidenceClass(item.pick.confidence)}`}>
+                    {item.pick.confidence ? label(confidence, item.pick.confidence) : "—"}
                   </span>
                 </Link>
               ))}

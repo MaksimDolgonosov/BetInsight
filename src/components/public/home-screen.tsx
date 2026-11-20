@@ -4,7 +4,7 @@ import { SiteFooter } from "@/components/public/site-footer";
 import { SiteHeader } from "@/components/public/site-header";
 import { Link } from "@/i18n/navigation";
 import { summarize, type PublicPick } from "@/server/domain/stats/metrics";
-import type { PublicBoard } from "@/server/stats/load";
+import type { PublicBoard, ScheduledForecast } from "@/server/stats/load";
 import { ArrowRight, Check, Hash, Lock, Send, ShieldCheck, Sparkles, Undo2, X } from "lucide-react";
 import { getFormatter, getTranslations } from "next-intl/server";
 import Image from "next/image";
@@ -26,10 +26,11 @@ export async function HomeScreen({
   const summary = summarize(board);
   const block = summary.aiPick;
   const bank = sample(windowed(block.bank, range), 48);
-  const upcoming = board.picks
-    .filter((pick) => isUpcomingKickoff(pick))
-    .sort((left, right) => (left.commenceTime ?? "").localeCompare(right.commenceTime ?? ""))
-    .slice(0, 5);
+  const upcoming = [
+    ...board.picks.filter((pick) => isUpcomingKickoff(pick)).map((pick) => ({ kind: "pick" as const, at: pick.commenceTime ?? "", pick })),
+    ...board.scheduled.map((match) => ({ kind: "scheduled" as const, at: match.commenceTime, match })),
+  ]
+    .sort((left, right) => left.at.localeCompare(right.at));
   const settled = board.picks
     .filter((pick) => pick.status !== "pending")
     .sort((left, right) => (right.settledAt ?? right.publishedAt).localeCompare(left.settledAt ?? left.publishedAt));
@@ -196,43 +197,49 @@ export async function HomeScreen({
               {upcoming.length === 0 ? (
                 <p className="px-6 py-5 text-[14px] text-[var(--bi-text-3)]">{t("emptyUpcoming")}</p>
               ) : (
-                upcoming.map((pick, index) => (
+                <div className="bi-scroll max-h-[1285px] overflow-y-auto lg:max-h-[405px]">
+                {upcoming.map((item, index) =>
+                  item.kind === "scheduled" ? (
+                    <ScheduledRow key={item.match.eventId} match={item.match} index={index} format={format} t={t} />
+                  ) : (
                   <Link
-                    key={pick.id}
-                    href={`/events/${pick.eventId}`}
+                    key={item.pick.id}
+                    href={`/events/${item.pick.eventId}`}
                     className={`flex flex-col gap-3 px-6 py-[18px] lg:flex-row lg:items-center lg:gap-4 ${index === 0 ? "bg-[#c8ff2e08]" : ""}`}
                   >
                     <div className="flex w-full flex-col gap-1 lg:w-[110px]">
-                      {pick.commenceTime ? <Countdown at={pick.commenceTime} started={t("started")} /> : null}
+                      {item.pick.commenceTime ? <Countdown at={item.pick.commenceTime} started={t("started")} /> : null}
                       <span className="text-[12px] text-[var(--bi-text-3)]">
-                        {pick.commenceTime ? when(pick.commenceTime, format, t) : "—"}
+                        {item.pick.commenceTime ? when(item.pick.commenceTime, format, t) : "—"}
                       </span>
                     </div>
                     <div className="flex min-w-0 flex-1 flex-col gap-1">
                       <span className="text-[12px] text-[var(--bi-text-3)]">
-                        {sportMark(pick.sportKey)} {pick.league}
+                        {sportMark(item.pick.sportKey)} {item.pick.league}
                       </span>
                       <span className="truncate text-[15px] font-semibold">
-                        {pick.home} — {pick.away}
+                        {item.pick.home} — {item.pick.away}
                       </span>
                     </div>
                     <div className="flex w-full items-center gap-2.5 lg:w-[160px]">
                       <span className="rounded-md bg-[var(--bi-surface-2)] px-2 py-1 font-stat text-[13px] font-semibold">
-                        {pickCode(pick, t)}
+                        {pickCode(item.pick, t)}
                       </span>
-                      <span className="truncate text-[13px] text-[var(--bi-text-2)]">{pickName(pick, selections)}</span>
+                      <span className="truncate text-[13px] text-[var(--bi-text-2)]">{pickName(item.pick, selections)}</span>
                     </div>
                     <span className="w-[100px] font-stat text-[14px] font-medium">
-                      {odds(format, pick.averagePrice)}
+                      {odds(format, item.pick.averagePrice)}
                     </span>
                     <span
-                      className={`inline-flex w-fit items-center gap-1.5 rounded-full px-2 py-1 text-[12px] font-semibold ${confidenceClass(pick.confidence)}`}
+                      className={`inline-flex w-fit items-center gap-1.5 rounded-full px-2 py-1 text-[12px] font-semibold ${confidenceClass(item.pick.confidence)}`}
                     >
                       <Sparkles className="size-3.5" />
-                      {pick.confidence ? label(confidence, pick.confidence) : "—"}
+                      {item.pick.confidence ? label(confidence, item.pick.confidence) : "—"}
                     </span>
                   </Link>
-                ))
+                  ),
+                )}
+                </div>
               )}
             </div>
           </div>
@@ -333,6 +340,44 @@ function Baseline({ title, value, color }: { title: string; value: string; color
       <span className="text-[13px] text-[var(--bi-text-2)]">{title}</span>
       <span className={`text-[15px] font-semibold ${color}`}>{value}</span>
     </div>
+  );
+}
+
+function ScheduledRow({
+  match,
+  index,
+  format,
+  t,
+}: {
+  match: ScheduledForecast;
+  index: number;
+  format: Awaited<ReturnType<typeof getFormatter>>;
+  t: Awaited<ReturnType<typeof getTranslations>>;
+}) {
+  return (
+    <Link
+      href={`/events/${match.eventId}`}
+      className={`flex flex-col gap-3 px-6 py-[18px] lg:flex-row lg:items-center lg:gap-4 ${index === 0 ? "bg-[#c8ff2e08]" : ""}`}
+    >
+      <div className="flex w-full flex-col gap-1 lg:w-[110px]">
+        <Countdown at={match.commenceTime} started={t("started")} />
+        <span className="text-[12px] text-[var(--bi-text-3)]">{when(match.commenceTime, format, t)}</span>
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <span className="text-[12px] text-[var(--bi-text-3)]">
+          {sportMark(match.sportKey)} {match.league}
+        </span>
+        <span className="truncate text-[15px] font-semibold">
+          {match.home} — {match.away}
+        </span>
+      </div>
+      <div className="flex w-full flex-col gap-1 lg:w-[160px]">
+        <span className="text-[14px] font-semibold">{t("forming")}</span>
+        <span className="text-[12px] text-[var(--bi-text-3)]">{when(match.voteTime, format, t)}</span>
+      </div>
+      <span className="w-[100px] font-stat text-[14px] text-[var(--bi-text-3)]">—</span>
+      <span className="w-[100px] text-[14px] text-[var(--bi-text-3)]">—</span>
+    </Link>
   );
 }
 

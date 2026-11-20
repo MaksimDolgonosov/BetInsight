@@ -25,6 +25,7 @@ export type ModelRow = {
   aiPickShortlisted: boolean;
   asymmetryScore?: number | null;
   asymmetryMarket?: string | null;
+  voteTime?: Date | null;
 };
 
 export function evaluateLeague(input: {
