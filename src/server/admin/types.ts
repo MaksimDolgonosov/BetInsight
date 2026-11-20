@@ -173,7 +173,7 @@ export interface AdminStore {
     comment: string;
     actor: string;
     now: Date;
-  }): Promise<{ ok: true; profitUnits: number } | { ok: false; error: SettlementError }>;
+  }): Promise<{ ok: true; profitUnits: number; eventId: string } | { ok: false; error: SettlementError }>;
   recordApiUsage(row: UsageDraft): Promise<void>;
   recordAiRequest(row: AiRequestDraft): Promise<string>;
   recordAudit(input: { actor: string; action: string; entity: string; payload: unknown }): Promise<void>;

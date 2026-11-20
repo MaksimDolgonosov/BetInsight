@@ -7,6 +7,7 @@ import { adminConfigured, getAdminStore } from "@/server/admin/store";
 import { parseSettingsForm, type SettingsError } from "@/server/domain/settings";
 import type { SettlementError, SettlementStatus } from "@/server/domain/settlement/profit";
 import { enqueueJob } from "@/server/integrations/qstash/enqueue";
+import { queuePublish } from "@/server/jobs/telegram";
 import { refreshPublicBoard } from "@/server/stats/refresh";
 import { requireAdmin, signIn, signOut } from "@/server/auth";
 
@@ -103,11 +104,19 @@ export async function settlePredictionAction(input: {
     return { ok: false, error: "not_found" };
   }
 
-  return getAdminStore().settlePrediction({
+  const result = await getAdminStore().settlePrediction({
     predictionId: input.predictionId,
     status: input.status,
     comment: input.comment,
     actor: session.user.email,
     now: new Date(),
   });
+  if (!result.ok) return result;
+
+  try {
+    await queuePublish({ kind: "result", eventId: result.eventId });
+  } catch {
+    // The result is already stored. A delivery failure must not look like a failed settlement.
+  }
+  return { ok: true, profitUnits: result.profitUnits };
 }

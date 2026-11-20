@@ -212,7 +212,8 @@ export class FileAdminStore implements AdminStore {
         comment: input.comment,
         now: input.now,
       });
-      if (!decision.ok || !prediction || !event) return decision;
+      if (!decision.ok) return decision;
+      if (!prediction || !event) return { ok: false as const, error: "not_found" as const };
 
       prediction.status = input.status;
       prediction.profitUnits = decision.profitUnits;
@@ -224,7 +225,7 @@ export class FileAdminStore implements AdminStore {
         profitUnits: decision.profitUnits,
         eventId: event.id,
       });
-      return { ok: true as const, profitUnits: decision.profitUnits };
+      return { ok: true as const, profitUnits: decision.profitUnits, eventId: event.id };
     });
   }
 
