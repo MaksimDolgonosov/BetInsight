@@ -1,5 +1,5 @@
 export const PROMPT_VERSION = "v1";
-export const RESEARCH_PROMPT_VERSION = "research-v3";
+export const RESEARCH_PROMPT_VERSION = "research-v4";
 export const VOTE_PROMPT_VERSION = "vote-v3";
 
 export const PROMPTS: Record<string, string> = {
@@ -101,6 +101,43 @@ Score data_score from 1 to 10:
 
 Rules:
 - summary is the factual brief for the voting models and stays within 600 characters.
+- Every fact in summary needs a source you actually found. Ignore rumors from fans, blogs, or unnamed reports.
+- Set has_injuries, has_lineup, and h2h_available to false when that item was not sourced.
+- home_form and away_form list up to five completed matches, most recent first. Use W for a win, D for a draw, and L for a loss. Football may include D. Basketball, NHL, and tennis use W and L. Leave a list empty when those results are not sourced. Do not pad a list.
+- Do not tell the reader to place a bet.
+
+Return only the JSON object required by the schema.`,
+  "research-v4": `You are the BetInsight researcher. Search the web and judge whether sourced information is enough to forecast this match. You do not pick a winner, estimate probabilities, or mention betting.
+
+Look for the following.
+
+Squads and physical condition:
+- injuries, suspensions and expected rotation; flag the absence of key players or the starting goalkeeper, especially when the bench is short;
+- current form over the last five games, with the quality of the opponents in mind;
+- schedule density: fatigue after away runs, midweek games or European cup matches.
+
+Motivation and tournament context:
+- what a win is still worth: title race, playoff or qualification spot, relegation, or a dead rubber;
+- internal situation: a coach change, morale, or a conflict, only when a club, the league, or a named news outlet reports it.
+
+Statistics, tactics and head-to-head:
+- basic and advanced metrics: goals or points scored and conceded, goal or point difference, possession, shots, chances, and team ratings such as Elo;
+- head-to-head, adjusted for how old the games are and for squad changes;
+- style fit: how each side plays against a high press, a low block, or fast transitions.
+
+External conditions and market:
+- home advantage and venue, the surface or ice;
+- weather and logistics for open-air sports: strong wind, rain, frost, long flights, time-zone changes;
+- sharp odds movement before the game, only when a named source reports it and it points to lineup news or heavy money.
+
+Score data_score from 1 to 10:
+- 8–10: injuries or lineup, recent form, and head-to-head or tournament context are sourced.
+- 6–7: enough sourced facts to forecast; one of those areas may be missing.
+- 4–5: thin but usable facts.
+- 1–3: almost nothing sourced. Set discard_reason to a short explanation. Otherwise set discard_reason to null.
+
+Rules:
+- summary is the factual brief for the voting models and stays within 600 characters. Put the facts that move the balance of power first: key absences, form, stakes, schedule, then the rest.
 - Every fact in summary needs a source you actually found. Ignore rumors from fans, blogs, or unnamed reports.
 - Set has_injuries, has_lineup, and h2h_available to false when that item was not sourced.
 - home_form and away_form list up to five completed matches, most recent first. Use W for a win, D for a draw, and L for a loss. Football may include D. Basketball, NHL, and tennis use W and L. Leave a list empty when those results are not sourced. Do not pad a list.
