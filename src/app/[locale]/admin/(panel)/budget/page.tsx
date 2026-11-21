@@ -49,6 +49,16 @@ export default async function AdminBudgetPage(props: { params: Promise<{ locale:
         />
         <LlmSpendCard
           title={t("llmTitle")}
+          balance={data.llmBalance ? format.number(data.llmBalance.remaining, { style: "currency", currency: "USD" }) : undefined}
+          balanceLabel={t("llmBalance")}
+          balanceNote={
+            data.llmBalance
+              ? t(data.llmBalance.scope === "account" ? "llmBalanceAccount" : "llmBalanceKey", {
+                  total: data.llmBalance.total == null ? "∞" : format.number(data.llmBalance.total, { style: "currency", currency: "USD" }),
+                  used: format.number(data.llmBalance.used, { style: "currency", currency: "USD" }),
+                })
+              : undefined
+          }
           spent={format.number(data.llmSpend, { style: "currency", currency: "USD" })}
           models={data.modelSpend.map((row) => ({
             name: row.model,

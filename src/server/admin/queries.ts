@@ -7,6 +7,7 @@ import { oddsApiMode } from "@/server/integrations/odds-api/client";
 import { qstashConfigured } from "@/server/integrations/qstash/client";
 import { redisConfigured } from "@/server/integrations/redis/client";
 import { listActiveTennisLeagues } from "@/server/integrations/odds-api/tennis";
+import { fetchOpenRouterBalance } from "@/server/integrations/openrouter/credits";
 import { loadVirtualNoConsensus } from "@/server/admin/virtual-consensus";
 import { listSavedPredictions } from "@/server/jobs/ai-store";
 import { averageKey, openingAverages } from "@/server/stats/average-price";
@@ -42,6 +43,7 @@ export async function loadOverview() {
     llmSpend: await store.aiSpendSince(startOfUtcMonth(now)),
     aiPickSpend: await store.aiSpendSince(startOfUtcMonth(now), ["research", "vote"]),
     modelSpend: await store.aiSpendByModel(startOfUtcMonth(now)),
+    llmBalance: await fetchOpenRouterBalance(),
     jobs,
     failedJobs: jobs.filter((job) => job.status === "failed").length,
     lastRemaining: apiRemaining,
@@ -83,6 +85,7 @@ export async function loadBudget() {
     llmSpend: await store.aiSpendSince(startOfUtcMonth(now)),
     aiPickSpend: await store.aiSpendSince(startOfUtcMonth(now), ["research", "vote"]),
     modelSpend: await store.aiSpendByModel(startOfUtcMonth(now)),
+    llmBalance: await fetchOpenRouterBalance(),
     lastRemaining: apiRemaining,
   };
 }

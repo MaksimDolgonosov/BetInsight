@@ -79,8 +79,14 @@ export function LlmSpendCard({
   ofBudget,
   valueNote,
   ratio,
+  balance,
+  balanceLabel,
+  balanceNote,
 }: {
   title: string;
+  balance?: string;
+  balanceLabel?: string;
+  balanceNote?: string;
   spent: string;
   models: { name: string; cost: string }[];
   ofBudget: string;
@@ -93,6 +99,13 @@ export function LlmSpendCard({
     <section className="rounded-xl border bg-card p-4 md:p-6">
       <h2 className="text-base font-semibold">{title}</h2>
       <p className="mt-4 text-4xl font-semibold tracking-tight">{spent}</p>
+      {balance ? (
+        <div className="mt-4 border-t pt-4">
+          <p className="text-xs text-muted-foreground">{balanceLabel}</p>
+          <p className="mt-1 font-mono text-2xl font-semibold">{balance}</p>
+          {balanceNote ? <p className="mt-1 text-xs text-muted-foreground">{balanceNote}</p> : null}
+        </div>
+      ) : null}
       {models.length > 0 ? (
         <ul className="mt-4 flex flex-col gap-1.5">
           {models.map((item) => (
