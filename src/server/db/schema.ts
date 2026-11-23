@@ -45,7 +45,6 @@ export const appSettings = pgTable("app_settings", {
   ]),
   aiPickResearchModel: text("ai_pick_research_model").notNull().default(""),
   aiPickConsensusMode: text("ai_pick_consensus_mode").notNull().default("two_thirds"),
-  aiPickProbabilityTolerance: doublePrecision("ai_pick_probability_tolerance").notNull().default(0.02),
   aiPickOddsMin: doublePrecision("ai_pick_odds_min").notNull().default(1.4),
   aiPickOddsMax: doublePrecision("ai_pick_odds_max").notNull().default(2.5),
   aiPickMinEv: doublePrecision("ai_pick_min_ev").notNull().default(-0.03),

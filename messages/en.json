@@ -439,8 +439,6 @@
       "consensusMode": "Agreement rule",
       "twoThirds": "2 of 3",
       "unanimous": "Every model",
-      "tolerance": "Probability tolerance, pp",
-      "toleranceHint": "The average probability must be at least 1 / price minus this tolerance.",
       "aiPickOddsMin": "Price from",
       "aiPickOddsMax": "Price to",
       "aiPickMinEv": "Lower bound, %",
@@ -721,7 +719,6 @@
       "no_shortlist": "The match has fewer than two priced outcomes, so the vote was skipped.",
       "not_selected": "No match in this league sits inside the time window and the probability band. The models were not called.",
       "data_score_discard": "The data score is too low, so the match was discarded before the vote.",
-      "missing_price": "The vote list has no prices yet, so the models were not called.",
       "web_search_limited": "The daily web-search limit is used up, so later requests run without search.",
       "missing_openrouter_key": "The OpenRouter key is missing, so the LLM blocks were skipped."
     },

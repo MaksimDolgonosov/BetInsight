@@ -41,10 +41,6 @@ export function voteShortlist(input: {
   return covered.length >= 2 ? covered : fallback;
 }
 
-export function shortlistPricesReady(candidates: readonly VoteCandidate[]): boolean {
-  return candidates.length >= 2 && candidates.every(hasPrice);
-}
-
 function headToHead(sportGroup: SportGroup): PickRef[] {
   const selections: Selection[] = sportGroup === "soccer" ? ["home", "draw", "away"] : ["home", "away"];
   return selections.map((selection) => ({ market: "h2h", selection, point: null }));

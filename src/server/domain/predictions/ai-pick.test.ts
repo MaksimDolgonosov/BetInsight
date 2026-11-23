@@ -44,13 +44,12 @@ describe("decideConsensus", () => {
   const prices = [{ key: outcomeKey({ market: "h2h", selection: "home", point: null }), price: 1.8 }];
   const favorite = outcomeKey({ market: "h2h", selection: "home", point: null });
 
-  it("publishes when two of three agree and the price stays fair", () => {
+  it("publishes when two of three agree, even if the price is shorter than the model probability", () => {
     const decision = decideConsensus({
-      votes: [vote("alpha", "home", 0.6, "high"), vote("beta", "home", 0.55, "low"), vote("gamma", "away", 0.42, "medium")],
+      votes: [vote("alpha", "home", 0.45, "high"), vote("beta", "home", 0.46, "low"), vote("gamma", "away", 0.42, "medium")],
       modelCount: 3,
       mode: "two_thirds",
       prices,
-      tolerance: 0.02,
       marketFavoriteKey: favorite,
     });
 
@@ -61,6 +60,19 @@ describe("decideConsensus", () => {
     expect(decision.reasoningModel).toBe("alpha");
     expect(decision.matchesMarketFavorite).toBe(true);
     expect(decision.pAiMin).toBeGreaterThanOrEqual(0.4);
+    expect(decision.pAiMean).toBeLessThan(1 / 1.8 - 0.02);
+  });
+
+  it("reaches consensus when the agreed outcome has no price", () => {
+    const decision = decideConsensus({
+      votes: [vote("alpha", "home", 0.6, "high"), vote("beta", "home", 0.55, "medium"), vote("gamma", "home", 0.52, "low")],
+      modelCount: 3,
+      mode: "two_thirds",
+      prices: [],
+      marketFavoriteKey: favorite,
+    });
+    expect(decision.status).toBe("consensus");
+    expect(decision.bestPrice).toBeNull();
   });
 
   it("rejects a strong disagreement below 0.4", () => {
@@ -74,7 +86,6 @@ describe("decideConsensus", () => {
       modelCount: 3,
       mode: "two_thirds",
       prices,
-      tolerance: 0.02,
       marketFavoriteKey: favorite,
     });
     expect(decision.status).toBe("no_consensus");
@@ -86,7 +97,6 @@ describe("decideConsensus", () => {
       modelCount: 3,
       mode: "unanimous",
       prices,
-      tolerance: 0.02,
       marketFavoriteKey: null,
     });
     expect(decision.status).toBe("no_consensus");
@@ -98,7 +108,6 @@ describe("decideConsensus", () => {
       modelCount: 3,
       mode: "two_thirds",
       prices,
-      tolerance: 0.02,
       marketFavoriteKey: favorite,
     });
     expect(decision.status).toBe("consensus");

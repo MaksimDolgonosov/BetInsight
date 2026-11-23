@@ -84,7 +84,6 @@ export function decideConsensus(input: {
   modelCount: number;
   mode: ConsensusMode;
   prices: { key: string; price: number }[];
-  tolerance: number;
   marketFavoriteKey: string | null;
 }): ConsensusDecision {
   const empty: ConsensusDecision = {
@@ -118,8 +117,8 @@ export function decideConsensus(input: {
   }
 
   const [key, agreeing] = leading;
-  const price = input.prices.find((item) => item.key === key)?.price;
-  if (price == null || price <= 1) return { ...empty, votesFor: agreeing.length };
+  const quoted = input.prices.find((item) => item.key === key)?.price;
+  const price = quoted != null && quoted > 1 ? quoted : null;
 
   const probabilities = input.votes.map((vote) => probabilityFor(vote, key));
   if (probabilities.some((value) => value == null || value < 0.4)) {
@@ -128,9 +127,6 @@ export function decideConsensus(input: {
   const known = probabilities.filter((value): value is number => value != null);
   const pAiMean = known.reduce((sum, value) => sum + value, 0) / known.length;
   const pAiMin = Math.min(...known);
-  if (pAiMean < 1 / price - input.tolerance) {
-    return { ...empty, votesFor: agreeing.length, pAiMean, pAiMin, bestPrice: price };
-  }
 
   const speaker = [...agreeing].sort(
     (left, right) => CONFIDENCE_RANK[right.confidence] - CONFIDENCE_RANK[left.confidence],

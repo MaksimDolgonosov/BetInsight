@@ -118,9 +118,6 @@ export function SettingsForm({ settings }: { settings: AdminSettings }) {
               <option value="unanimous">{t("unanimous")}</option>
             </select>
           </Field>
-          <Field label={t("tolerance")} hint={t("toleranceHint")}>
-            <Input name="aiPickTolerancePoints" type="number" min="0" max="20" step="0.1" defaultValue={Number((settings.aiPick.probabilityTolerance * 100).toFixed(2))} required />
-          </Field>
           <Field label={t("aiPickDailyLimit")} hint={t("aiPickDailyLimitHint")}>
             <Input name="aiPickDailyLimit" type="number" min="0" max="20" step="1" defaultValue={settings.aiPick.dailyLimit} required />
           </Field>

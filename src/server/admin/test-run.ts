@@ -4,7 +4,7 @@ import { getAdminStore } from "@/server/admin/store";
 import type { TestStreamEvent, TestTrack } from "@/server/admin/test-events";
 import { evaluateQuotes } from "@/server/domain/odds/evaluate";
 import { decideConsensus, marketFavoriteKey, outcomeKey, type ModelVoteInput } from "@/server/domain/predictions/ai-pick";
-import { shortlistPricesReady, voteShortlist } from "@/server/domain/predictions/vote-shortlist";
+import { voteShortlist } from "@/server/domain/predictions/vote-shortlist";
 import { gateByDataScore, researchBrief } from "@/server/domain/selection";
 import type { Market, SportGroup } from "@/server/domain/settings";
 import { fetchLeagueOdds, oddsApiMode } from "@/server/integrations/odds-api/client";
@@ -314,8 +314,8 @@ export async function startTestRun(input: {
                   send({ type: "done" });
                   return;
                 }
-                if (!shortlistPricesReady(shortlist)) {
-                  send({ type: "note", code: shortlist.length < 2 ? "no_shortlist" : "missing_price" });
+                if (shortlist.length < 2) {
+                  send({ type: "note", code: "no_shortlist" });
                   send({ type: "done" });
                   return;
                 }
@@ -402,7 +402,6 @@ export async function startTestRun(input: {
                   modelCount: settings.aiPick.models.length,
                   mode: settings.aiPick.consensusMode,
                   prices: shortlist.flatMap((row) => (row.bestPrice != null && row.bestPrice > 1 ? [{ key: outcomeKey(row), price: row.bestPrice }] : [])),
-                  tolerance: settings.aiPick.probabilityTolerance,
                   marketFavoriteKey: favorite,
                 });
                 await store.recordConsensus({

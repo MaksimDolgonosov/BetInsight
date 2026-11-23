@@ -27,6 +27,7 @@ export type ScheduledForecast = {
 export function scheduledForecasts(input: {
   rows: readonly ScheduledSource[];
   publishedEventIds: ReadonlySet<string>;
+  declinedEventIds?: ReadonlySet<string>;
   now: Date;
   voteWindow?: VoteWindow;
   leadHours?: number;
@@ -49,7 +50,7 @@ export function scheduledForecasts(input: {
   const leadHours = input.leadHours ?? DEFAULT_VOTE_LEAD_HOURS;
   const result: ScheduledForecast[] = [];
   for (const row of chosen.values()) {
-    if (input.publishedEventIds.has(row.eventId) || row.discardReason) continue;
+    if (input.publishedEventIds.has(row.eventId) || row.discardReason || input.declinedEventIds?.has(row.eventId)) continue;
     if (row.commenceTime.getTime() <= input.now.getTime()) continue;
     const at =
       row.voteTime ??

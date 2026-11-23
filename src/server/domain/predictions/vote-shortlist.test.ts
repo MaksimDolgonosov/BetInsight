@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { shortlistPricesReady, voteShortlist, type VoteMarketOutcome } from "./vote-shortlist";
+import { voteShortlist, type VoteMarketOutcome } from "./vote-shortlist";
 
 function outcome(overrides: Partial<VoteMarketOutcome> & Pick<VoteMarketOutcome, "selection" | "consensusProb" | "bestPrice">): VoteMarketOutcome {
   return {
@@ -25,7 +25,6 @@ describe("voteShortlist", () => {
     });
 
     expect(selected.map((item) => `${item.market}:${item.selection}`)).toEqual(["h2h:away", "totals:over", "spreads:home"]);
-    expect(shortlistPricesReady(selected)).toBe(true);
   });
 
   it("uses head-to-head when the book has not priced the match", () => {
@@ -34,7 +33,7 @@ describe("voteShortlist", () => {
 
     expect(soccer.map((item) => item.selection)).toEqual(["home", "draw", "away"]);
     expect(nba.map((item) => item.selection)).toEqual(["home", "away"]);
-    expect(shortlistPricesReady(soccer)).toBe(false);
+    expect(soccer.every((item) => item.bestPrice == null)).toBe(true);
   });
 
   it("drops an unpriced draw when home and away already have prices", () => {
@@ -47,6 +46,5 @@ describe("voteShortlist", () => {
     });
 
     expect(selected.map((item) => item.selection)).toEqual(["home", "away"]);
-    expect(shortlistPricesReady(selected)).toBe(true);
   });
 });

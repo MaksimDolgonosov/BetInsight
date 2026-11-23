@@ -40,4 +40,15 @@ describe("scheduledForecasts", () => {
     expect(visible.map((match) => match.eventId)).toEqual(["waiting"]);
     expect(visible[0]?.voteTime).toBe("2026-11-20T17:00:00.000Z");
   });
+
+  it("drops a match when agreement, the 0.4 floor, or the daily limit keeps the forecast unpublished", () => {
+    const rows = [row({ eventId: "split" }), row({ eventId: "capped", discardReason: "daily_limit" })];
+    const visible = scheduledForecasts({
+      rows,
+      publishedEventIds: new Set(),
+      declinedEventIds: new Set(["split"]),
+      now: NOW,
+    });
+    expect(visible).toEqual([]);
+  });
 });

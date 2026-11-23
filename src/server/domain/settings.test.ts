@@ -33,7 +33,6 @@ function validEntries(overrides: Record<string, string | string[]> = {}) {
     aiPickModel2: "google/gemini-3.8-flash",
     aiPickResearchModel: "perplexity/sonar",
     aiPickConsensusMode: "two_thirds",
-    aiPickTolerancePoints: "2",
     aiPickOddsMin: "1.4",
     aiPickOddsMax: "2.5",
     aiPickMinEvPercent: "-3",
@@ -120,7 +119,6 @@ describe("parseSettingsForm", () => {
       "google/gemini-3.8-flash",
     ]);
     expect(result.settings.aiPick.minEv).toBeCloseTo(current.aiPick.minEv);
-    expect(result.settings.aiPick.probabilityTolerance).toBeCloseTo(0.02);
     expect(result.settings.aiPick.dailyLimit).toBe(3);
     expect(result.settings.selection).toEqual(defaultSettings().selection);
   });

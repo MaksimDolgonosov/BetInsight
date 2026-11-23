@@ -277,12 +277,37 @@ async function readScheduled(
       .select({ eventId: predictions.eventId })
       .from(predictions)
       .where(and(eq(predictions.track, "ai_pick"), inArray(predictions.eventId, eventIds)));
+  const consensus = eventIds.length === 0
+    ? []
+    : await db
+      .select({
+        eventId: aiConsensus.eventId,
+        status: aiConsensus.status,
+        createdAt: aiConsensus.createdAt,
+      })
+      .from(aiConsensus)
+      .where(and(eq(aiConsensus.source, "job"), inArray(aiConsensus.eventId, eventIds)));
   return scheduledForecasts({
     rows,
     publishedEventIds: new Set(published.map((row) => row.eventId)),
+    declinedEventIds: declinedForecasts(consensus),
     now,
     voteWindow,
   });
+}
+
+function declinedForecasts(rows: { eventId: string; status: string; createdAt: Date }[]): Set<string> {
+  const latest = new Map<string, { status: string; at: number }>();
+  for (const row of rows) {
+    const at = row.createdAt.getTime();
+    const current = latest.get(row.eventId);
+    if (!current || at >= current.at) latest.set(row.eventId, { status: row.status, at });
+  }
+  const declined = new Set<string>();
+  for (const [eventId, row] of latest) {
+    if (row.status !== "consensus") declined.add(eventId);
+  }
+  return declined;
 }
 
 export async function loadScheduledForecast(eventId: string): Promise<ScheduledForecast | null> {

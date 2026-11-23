@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, gte, lt } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, isNull, lt } from "drizzle-orm";
 import { getDb } from "@/server/db";
 import { aiConsensus, aiRequests, aiVotes, events, modelEvaluations, predictions } from "@/server/db/schema";
 import type { PredictionTrack } from "@/server/domain/predictions/publish";
@@ -110,6 +110,19 @@ export async function consensusExists(eventId: string, start: Date): Promise<boo
 
 export async function saveConsensus(row: typeof aiConsensus.$inferInsert) {
   await getDb().insert(aiConsensus).values(row);
+}
+
+export async function withholdScheduledForecast(eventId: string, reason: "no_consensus" | "daily_limit") {
+  await getDb()
+    .update(modelEvaluations)
+    .set({ discardReason: reason })
+    .where(and(
+      eq(modelEvaluations.eventId, eventId),
+      eq(modelEvaluations.source, "job"),
+      isNotNull(modelEvaluations.asymmetryScore),
+      isNull(modelEvaluations.discardReason),
+    ));
+  refreshPublicBoard();
 }
 
 export async function listSavedPredictions(limit: number) {

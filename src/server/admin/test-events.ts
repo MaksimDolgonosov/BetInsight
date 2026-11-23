@@ -111,7 +111,6 @@ export type TestStreamEvent =
         | "no_shortlist"
         | "not_selected"
         | "data_score_discard"
-        | "missing_price"
         | "web_search_limited";
     }
   | { type: "error"; code: string }

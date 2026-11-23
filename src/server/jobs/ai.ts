@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getAdminStore } from "@/server/admin/store";
 import { startOfUtcDay, startOfUtcMonth } from "@/server/budget/budget";
 import { decideConsensus, marketFavoriteKey, outcomeKey, type ModelVoteInput, type PickRef } from "@/server/domain/predictions/ai-pick";
-import { shortlistPricesReady, voteShortlist, type VoteCandidate } from "@/server/domain/predictions/vote-shortlist";
+import { voteShortlist, type VoteCandidate } from "@/server/domain/predictions/vote-shortlist";
 import { eventsReadyForVote, gateByDataScore, type DataScoreThresholds } from "@/server/domain/selection";
 import { decideAiPickPublication, predictionHash, samePoint, type CandidateQuote } from "@/server/domain/predictions/publish";
 import { isSportGroup, MARKETS, type Market } from "@/server/domain/settings";
@@ -22,6 +22,7 @@ import {
   predictionExists,
   saveConsensus,
   savePrediction,
+  withholdScheduledForecast,
   votedModels,
   votesForEvent,
 } from "@/server/jobs/ai-store";
@@ -102,9 +103,6 @@ export async function runAiConsensus(payload: unknown, now: Date): Promise<JobOu
   const parsed = consensusSchema.safeParse(payload);
   if (!parsed.success) throw new JobInputError("invalid_payload");
   const { eventId, day } = parsed.data;
-  const context = await eventContext(eventId);
-  const candidates = context ? candidatesFor(context.group, context.evaluations) : [];
-  if (context && !shortlistPricesReady(candidates)) return { status: "skipped", detail: { reason: "missing_price" } };
   return runJob({
     job: "ai-consensus",
     idempotencyKey: `ai-consensus:${eventId}:${day}`,
@@ -265,7 +263,6 @@ async function consensusEvent(eventId: string, day: string, now: Date): Promise<
     modelCount: settings.aiPick.models.length,
     mode: settings.aiPick.consensusMode,
     prices: shortlist.flatMap((row) => (row.bestPrice != null && row.bestPrice > 1 ? [{ key: outcomeKey(row), price: row.bestPrice }] : [])),
-    tolerance: settings.aiPick.probabilityTolerance,
     marketFavoriteKey: marketFavoriteKey(
       context.evaluations.flatMap((row) => {
         const pick = asPick(row)[0];
@@ -295,6 +292,7 @@ async function consensusEvent(eventId: string, day: string, now: Date): Promise<
           now,
         });
   if (saved === "saved" || saved === "duplicate" || saved === "already_saved") await publishForecast(eventId);
+  if (saved === "no_consensus" || saved === "daily_limit") await withholdScheduledForecast(eventId, saved);
   await saveConsensus({
     eventId,
     home: context.event.home,

@@ -40,7 +40,6 @@ export type AiPickSettings = {
   models: [string, string, string];
   researchModel: string;
   consensusMode: ConsensusMode;
-  probabilityTolerance: number;
   oddsMin: number;
   oddsMax: number;
   minEv: number;
@@ -191,7 +190,6 @@ function defaultAiPick(): AiPickSettings {
     models: [...DEFAULT_AI_PICK_MODELS],
     researchModel: "",
     consensusMode: "two_thirds",
-    probabilityTolerance: 0.02,
     oddsMin: 1.4,
     oddsMax: 2.5,
     minEv: -0.03,
@@ -210,7 +208,6 @@ function mergeAiPick(stored: AiPickSettings | undefined, fallback: AiPickSetting
     models: [models[0] || fallback.models[0], models[1] || fallback.models[1], models[2] || fallback.models[2]],
     researchModel: stored.researchModel ?? fallback.researchModel,
     consensusMode: stored.consensusMode === "unanimous" ? "unanimous" : "two_thirds",
-    probabilityTolerance: stored.probabilityTolerance ?? fallback.probabilityTolerance,
     oddsMin: stored.oddsMin ?? fallback.oddsMin,
     oddsMax: stored.oddsMax ?? fallback.oddsMax,
     minEv: stored.minEv ?? fallback.minEv,
@@ -339,7 +336,6 @@ export const adminSettingsSchema = z
       models: z.tuple([z.string().trim().min(3).max(120), z.string().trim().min(3).max(120), z.string().trim().min(3).max(120)]),
       researchModel: z.string().trim().max(120),
       consensusMode: z.enum(["two_thirds", "unanimous"]),
-      probabilityTolerance: z.number().min(0).max(0.2),
       oddsMin: z.number().gt(1),
       oddsMax: z.number().gt(1),
       minEv: z.number().min(-0.5).max(0.5),
@@ -521,7 +517,6 @@ export function parseSettingsForm(
       ],
       researchModel: String(formData.get("aiPickResearchModel") ?? ""),
       consensusMode: String(formData.get("aiPickConsensusMode") ?? ""),
-      probabilityTolerance: numberField(formData, "aiPickTolerancePoints") / 100,
       oddsMin: current.aiPick.oddsMin,
       oddsMax: current.aiPick.oddsMax,
       minEv: current.aiPick.minEv,
