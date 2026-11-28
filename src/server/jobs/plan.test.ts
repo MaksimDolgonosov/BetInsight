@@ -58,6 +58,20 @@ describe("data job plan", () => {
     expect(ids).toEqual(["finished"]);
   });
 
+  it("retries scores after the night slate has started when later matches are still in the window", () => {
+    const morning = new Date("2026-11-28T04:00:00.000Z");
+    const calls = planDay({
+      now: morning,
+      leagues: [{ key: "basketball_nba" }],
+      events: [
+        { sportKey: "basketball_nba", commenceTime: "2026-11-28T00:13:00.000Z", status: "scheduled" },
+        { sportKey: "basketball_nba", commenceTime: "2026-11-28T22:10:00.000Z", status: "scheduled" },
+      ],
+    });
+
+    expect(calls.map((call) => `${call.job}:${call.purpose}`)).toEqual(["fetch-odds:opening", "fetch-scores:retry"]);
+  });
+
   it("retries unsettled scores and ignores matches that already started", () => {
     const calls = planDay({
       now,

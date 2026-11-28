@@ -56,26 +56,27 @@ export function planDay(input: {
           ...(markets ? { markets } : {}),
         });
       }
-      if (upcoming.length === 0) continue;
-      const first = earliest(upcoming);
-      const last = latest(today);
-      if (closingKeys.has(sportKey)) {
+      if (upcoming.length > 0) {
+        const first = earliest(upcoming);
+        const last = latest(today);
+        if (closingKeys.has(sportKey)) {
+          calls.push({
+            job: "fetch-closing-odds",
+            sportKey,
+            day,
+            purpose: "prestart",
+            notBefore: new Date(first.getTime() - CLOSING_LEAD_MS),
+            ...(markets ? { markets } : {}),
+          });
+        }
         calls.push({
-          job: "fetch-closing-odds",
+          job: "fetch-scores",
           sportKey,
           day,
-          purpose: "prestart",
-          notBefore: new Date(first.getTime() - CLOSING_LEAD_MS),
-          ...(markets ? { markets } : {}),
+          purpose: "closing",
+          notBefore: new Date(last.getTime() + SCORES_LAG_MS),
         });
       }
-      calls.push({
-        job: "fetch-scores",
-        sportKey,
-        day,
-        purpose: "closing",
-        notBefore: new Date(last.getTime() + SCORES_LAG_MS),
-      });
     }
 
     const retry = input.events.some((event) => needsScoreRetry(event, sportKey, input.now));
